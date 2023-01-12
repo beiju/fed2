@@ -2,15 +2,15 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Copy, Clone, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum TeamAtBat {
     #[default]
-    Home,
     Away,
+    Home,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerDesc {
     pub id: Uuid,
@@ -20,18 +20,11 @@ pub struct PlayerDesc {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StateDelta {
-    #[serde(
-    default,
-    skip_serializing_if = "Option::is_none",
-    with = "::serde_with::rust::double_option",
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "::serde_with::rust::double_option")]
     pub batter: Option<Option<PlayerDesc>>,
-    pub defenders: Option<Vec<PlayerDesc>>,
-    #[serde(
-    default,
-    skip_serializing_if = "Option::is_none",
-    with = "::serde_with::rust::double_option",
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "::serde_with::rust::double_option")]
+    pub defenders: Option<Option<Vec<PlayerDesc>>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "::serde_with::rust::double_option")]
     pub pitcher: Option<Option<PlayerDesc>>,
     pub started: Option<bool>,
     pub team_at_bat: Option<TeamAtBat>,
@@ -53,7 +46,7 @@ pub struct GameUpdateDelta {
 #[serde(rename_all = "camelCase")]
 pub struct State {
     pub batter: Option<PlayerDesc>,
-    pub defenders: Vec<PlayerDesc>,
+    pub defenders: Option<Vec<PlayerDesc>>,
     pub pitcher: Option<PlayerDesc>,
     pub started: bool,
     pub team_at_bat: TeamAtBat,

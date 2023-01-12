@@ -5,6 +5,8 @@ mod fed_schema;
 
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
+use chrono::format::parse;
+use itertools::Itertools;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -17,14 +19,31 @@ async fn async_main() -> anyhow::Result<()> {
     let response = reqwest::get("https://api2.sibr.dev/chronicler/v0/game-events?count=1000").await?;
     let json: Vec<GameResponse> = response.json().await?;
 
+    let groups = json.into_iter()
+        .group_by(|item| item.timestamp);
+
     let mut game_parsers: HashMap<_, Parser> = HashMap::new();
-    for game in json {
-        println!("Input: {:?}", game.data);
+    let mut pending_lines_for_game: HashMap<_, Vec<_>> = HashMap::new();
+    for (_, group) in &groups {
+        let mut group = group.collect_vec();
+        group.sort_by_key(|item| item.data.display_order);
+        for game in group {
+            println!("For game {}", game.game_id);
+            println!("    Input: {:?}", game.data);
 
-        let mut parser = game_parsers.entry(game.game_id).or_default();
-        let parsed = parser.parse(game.data)?;
+            let mut parser = game_parsers.entry(game.game_id).or_default();
+            let (parsed, state) = parser.parse(game.data.clone())?;
 
-        println!("Output: {parsed:?}");
+            let mut pending_lines = pending_lines_for_game.entry(game.game_id).or_default();
+            pending_lines.push(game.data.display_text);
+            if let Some(parsed) = parsed {
+                println!("    Output: {parsed:?}");
+                let reconstructed_description = parsed.lines(state)?;
+                assert_eq!(pending_lines, &reconstructed_description);
+                pending_lines.clear();
+            }
+
+        }
     }
     Ok(())
 }
