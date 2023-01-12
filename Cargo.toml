@@ -14,3 +14,7 @@ serde_with = "2.2.0"
 uuid = { version = "1.2.2", features = ["serde"] }
 chrono = { version = "0.4.23", features = ["serde"] }
 tokio = { version = "1.24.1", features = ["rt"] }
+nom = "7.1.1"
+nom-supreme = "0.8.0"
+nom_locate = "4.0.0"
+thiserror = "1.0.38"
