@@ -6,7 +6,7 @@ use nom::Parser as NomParser;
 use nom::sequence::pair;
 use crate::chron_schema::{GameUpdate, GameUpdateDelta, State, TeamAtBat};
 use crate::fed_schema::Event;
-use crate::text_parsers::{parse_ball, parse_strike};
+use crate::text_parsers::{parse_ball, parse_strike, parse_strikeout};
 
 #[derive(Debug, Default)]
 enum ParserExpectedEvent {
@@ -58,7 +58,7 @@ impl Parser {
                 if self.state.balls == prev_state.balls + 1 {
                     // Ball event
                     let pitcher = self.state.pitcher.as_ref()
-                        .ok_or_else(|| anyhow!("Expected non-null pitcher in a BatterUp event"))?;
+                        .ok_or_else(|| anyhow!("Expected non-null pitcher in a Ball event"))?;
                     // let batter = self.state.batter.as_ref()
                     //     .ok_or_else(|| anyhow!("Expected non-null batter in a BatterUp event"))?;
                     let ball_flavor = run_parser(parse_ball(self.state.balls, self.state.strikes, &pitcher.name))(&delta.display_text)?;
@@ -67,13 +67,24 @@ impl Parser {
                 } else if self.state.strikes == prev_state.strikes + 1 {
                     // Strike event
                     let pitcher = self.state.pitcher.as_ref()
-                        .ok_or_else(|| anyhow!("Expected non-null pitcher in a BatterUp event"))?;
+                        .ok_or_else(|| anyhow!("Expected non-null pitcher in a Strike event"))?;
                     let batter = self.state.batter.as_ref()
-                        .ok_or_else(|| anyhow!("Expected non-null batter in a BatterUp event"))?;
+                        .ok_or_else(|| anyhow!("Expected non-null batter in a Strike event"))?;
 
                     let strike_flavor = run_parser(parse_strike(self.state.balls, self.state.strikes, &pitcher.name, &batter.name))(&delta.display_text)?;
                     self.next_event_genre = ParserExpectedEvent::PostPitchEmpty(Event::Strike(strike_flavor));
                     None
+                } else if self.state.outs == prev_state.outs + 1 {
+                    // The only way to get an out without an intermediate event is a strikeout
+                    let pitcher = self.state.pitcher.as_ref()
+                        .ok_or_else(|| anyhow!("Expected non-null pitcher in a Strike event"))?;
+                    // Batter gets cleared from current state
+                    let batter = prev_state.batter.as_ref()
+                        .ok_or_else(|| anyhow!("Expected non-null batter before a Strike event"))?;
+
+                    run_parser(parse_strikeout(&pitcher.name, &batter.name))(&delta.display_text)?;
+                    self.next_event_genre = ParserExpectedEvent::BatterUp;
+                    Some(Event::Strikeout(batter.clone()))
                 } else {
                     // TODO
                     run_parser(tag("BAM! Ji-Eun Jasper slaps it to Left Field..."))(&delta.display_text)?;

@@ -9,6 +9,7 @@ pub enum BallFlavor {
     WayOutside,
     JustOutside,
     MissesTheZone,
+    Adjective(String),
 }
 
 #[derive(Debug)]
@@ -25,6 +26,7 @@ pub enum Event {
     Ball(BallFlavor),
     Strike(StrikeFlavor),
     FieldingOut,
+    Strikeout(PlayerDesc),
 }
 
 struct Count(i64, i64);
@@ -49,23 +51,24 @@ impl Event {
             Event::Ball(flavor) => {
                 let count = Count(state.balls, state.strikes);
                 let pitcher = state.pitcher.as_ref()
-                    .ok_or_else(|| anyhow!("Expected non-null pitcher in a BatterUp event"))?;
+                    .ok_or_else(|| anyhow!("Expected non-null pitcher in a Ball event"))?;
                 // let batter = state.batter.as_ref()
-                //     .ok_or_else(|| anyhow!("Expected non-null batter in a BatterUp event"))?;
+                //     .ok_or_else(|| anyhow!("Expected non-null batter in a Ball event"))?;
                 let text = match flavor {
                     BallFlavor::None => { format!("Ball. {count}")  }
                     BallFlavor::WayOutside => { format!("Ball, way outside. {count}") }
                     BallFlavor::JustOutside => { format!("Ball, just outside. {count}.") }
                     BallFlavor::MissesTheZone => { format!("{} just misses the zone. Ball, {count}.", pitcher.name) }
+                    BallFlavor::Adjective(adj) => { format!("{adj} pitch. Ball, {count}.") }
                 };
                 vec![text, String::new()]
             }
             Event::Strike(flavor) => {
                 let count = Count(state.balls, state.strikes);
                 let pitcher = state.pitcher.as_ref()
-                    .ok_or_else(|| anyhow!("Expected non-null pitcher in a BatterUp event"))?;
+                    .ok_or_else(|| anyhow!("Expected non-null pitcher in a Strike event"))?;
                 let batter = state.batter.as_ref()
-                    .ok_or_else(|| anyhow!("Expected non-null batter in a BatterUp event"))?;
+                    .ok_or_else(|| anyhow!("Expected non-null batter in a Strike event"))?;
 
                 let text = match flavor {
                     StrikeFlavor::None => { format!("Strike, {count}.") }
@@ -78,6 +81,13 @@ impl Event {
                 vec![
                     "BAM! Ji-Eun Jasper slaps it to Left Field...".to_string(),
                     "Fly out to Jay Camacho.".to_string(),
+                ]
+            }
+            Event::Strikeout(batter) => {
+                let pitcher = state.pitcher.as_ref()
+                    .ok_or_else(|| anyhow!("Expected non-null pitcher in a Strikeout event"))?;
+                vec![
+                    format!("{} strikes {} out.", pitcher.name, batter.name)
                 ]
             }
         })

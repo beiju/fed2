@@ -49,6 +49,8 @@ pub fn parse_ball<'a, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitcher_
                 .map(|_| BallFlavor::JustOutside),
             count_dot(balls, strikes,pair(tag(pitcher_name), tag(" just misses the zone. Ball,")))
                 .map(|_| BallFlavor::MissesTheZone),
+            count_dot(balls, strikes,parse_terminated(" pitch. Ball,"))
+                .map(|s| BallFlavor::Adjective(s.to_string())),
         )).parse(input)
     }
 }
@@ -66,8 +68,18 @@ pub fn parse_strike<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pi
     }
 }
 
+pub fn parse_strikeout<'a, 'b, E: ParseError<&'a str>>(pitcher_name: &'b str, batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, (), E> + 'b {
+    move |input| {
+        let (input, _) = tag(pitcher_name).parse(input)?;
+        let (input, _) = tag(" strikes ").parse(input)?;
+        let (input, _) = tag(batter_name).parse(input)?;
+        let (input, _) = tag(" out.").parse(input)?;
+        Ok((input, ()))
+    }
+}
 
-pub(crate) fn parse_terminated<'s, Er: ParseError<&'s str>>(tag_content: &str) -> impl Fn(&'s str) -> ParserResult<&'s str, Er> + '_ {
+
+pub(crate) fn parse_terminated<'s, E: ParseError<&'s str>>(tag_content: &str) -> impl Fn(&'s str) -> IResult<&'s str, &'s str, E> + '_ {
     move |input| {
         let (input, parsed_value) = if tag_content == "." {
             alt((
