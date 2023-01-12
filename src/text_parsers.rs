@@ -4,7 +4,7 @@ use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_until1};
 use nom::combinator::{fail, recognize, verify};
 use nom::error::ParseError;
-use nom::sequence::{preceded, terminated};
+use nom::sequence::{pair, preceded, terminated};
 use nom_supreme::error::{BaseErrorKind, ErrorTree};
 use nom_supreme::final_parser::{final_parser, Location};
 use crate::fed_schema::{BallFlavor, StrikeFlavor};
@@ -12,31 +12,57 @@ use crate::fed_schema::{BallFlavor, StrikeFlavor};
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
 pub(crate) type ParserResult<'a, Out, Er> = IResult<&'a str, Out, Er>;
 
-pub fn parse_literal<'a, E: ParseError<&'a str>>(literal: &str) -> impl Fn(&'a str) -> IResult<&'a str, (), E> + '_ {
+pub fn parse_literal<'a, E: ParseError<&'a str>>(literal: &str) -> impl FnMut(&'a str) -> IResult<&'a str, (), E> + '_ {
     move |input| tag(literal).map(|_| ()).parse(input)
 }
 
-pub fn parse_ball<'a, E: ParseError<&'a str>>(balls: i64, strikes: i64) -> impl Fn(&'a str) -> IResult<&'a str, BallFlavor, E> {
+fn count<'a, O, E, F>(balls: i64, strikes: i64, mut child: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+    where E: ParseError<&'a str>,
+          F: FnMut(&'a str) -> IResult<&'a str, O, E> {
     move |input| {
-        let (input, flavor) = alt((
-            tag("Ball.").map(|_| BallFlavor::None),
-            tag("Ball, way outside.").map(|_| BallFlavor::WayOutside),
-        )).parse(input)?;
+        let (input, out) = child.parse(input)?;
         let (input, _) = tag(format!(" {}-{}", balls, strikes).as_str()).parse(input)?;
 
-        Ok((input, flavor))
+        Ok((input, out))
     }
 }
 
-pub fn parse_strike<'a, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitcher_name: &str) -> impl Fn(&'a str) -> IResult<&'a str, StrikeFlavor, E> + '_ {
+fn count_dot<'a, O, E, F>(balls: i64, strikes: i64, mut child: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+    where E: ParseError<&'a str>,
+          F: FnMut(&'a str) -> IResult<&'a str, O, E> {
     move |input| {
-        let (input, flavor) = alt((
-            tag("Strike.").map(|_| StrikeFlavor::None),
-            preceded(tag(pitcher_name), tag(" throws a strike.")).map(|_| StrikeFlavor::NamedPitcher),
-        )).parse(input)?;
+        let (input, out) = child.parse(input)?;
         let (input, _) = tag(format!(" {}-{}.", balls, strikes).as_str()).parse(input)?;
 
-        Ok((input, flavor))
+        Ok((input, out))
+    }
+}
+
+pub fn parse_ball<'a, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitcher_name: &str) -> impl FnMut(&'a str) -> IResult<&'a str, BallFlavor, E> + '_ {
+    move |input| {
+        alt((
+            count(balls, strikes, tag("Ball."))
+                .map(|_| BallFlavor::None),
+            count(balls, strikes, tag("Ball, way outside."))
+                .map(|_| BallFlavor::WayOutside),
+            count_dot(balls, strikes, tag("Ball, just outside."))
+                .map(|_| BallFlavor::JustOutside),
+            count_dot(balls, strikes,pair(tag(pitcher_name), tag(" just misses the zone. Ball,")))
+                .map(|_| BallFlavor::MissesTheZone),
+        )).parse(input)
+    }
+}
+
+pub fn parse_strike<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitcher_name: &'b str, batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, StrikeFlavor, E> + 'b {
+    move |input| {
+        alt((
+            count_dot(balls, strikes, tag("Strike,"))
+                .map(|_| StrikeFlavor::None),
+            count_dot(balls, strikes, preceded(tag(pitcher_name), tag(" throws a strike.")))
+                .map(|_| StrikeFlavor::ThrowsAStrike),
+            count_dot(balls, strikes, preceded(tag(batter_name), tag(" is caught looking. Strike,")))
+                .map(|_| StrikeFlavor::CaughtLooking),
+        )).parse(input)
     }
 }
 

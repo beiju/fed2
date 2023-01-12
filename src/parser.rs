@@ -57,15 +57,21 @@ impl Parser {
             ParserExpectedEvent::Pitch => {
                 if self.state.balls == prev_state.balls + 1 {
                     // Ball event
-                    let ball_flavor = run_parser(parse_ball(self.state.balls, self.state.strikes))(&delta.display_text)?;
+                    let pitcher = self.state.pitcher.as_ref()
+                        .ok_or_else(|| anyhow!("Expected non-null pitcher in a BatterUp event"))?;
+                    // let batter = self.state.batter.as_ref()
+                    //     .ok_or_else(|| anyhow!("Expected non-null batter in a BatterUp event"))?;
+                    let ball_flavor = run_parser(parse_ball(self.state.balls, self.state.strikes, &pitcher.name))(&delta.display_text)?;
                     self.next_event_genre = ParserExpectedEvent::PostPitchEmpty(Event::Ball(ball_flavor));
                     None
                 } else if self.state.strikes == prev_state.strikes + 1 {
                     // Strike event
                     let pitcher = self.state.pitcher.as_ref()
                         .ok_or_else(|| anyhow!("Expected non-null pitcher in a BatterUp event"))?;
+                    let batter = self.state.batter.as_ref()
+                        .ok_or_else(|| anyhow!("Expected non-null batter in a BatterUp event"))?;
 
-                    let strike_flavor = run_parser(parse_strike(self.state.balls, self.state.strikes, &pitcher.name))(&delta.display_text)?;
+                    let strike_flavor = run_parser(parse_strike(self.state.balls, self.state.strikes, &pitcher.name, &batter.name))(&delta.display_text)?;
                     self.next_event_genre = ParserExpectedEvent::PostPitchEmpty(Event::Strike(strike_flavor));
                     None
                 } else {
@@ -82,7 +88,9 @@ impl Parser {
                 Some(event)
             }
             ParserExpectedEvent::Contact => {
-                todo!()
+                run_parser(tag("Fly out to Jay Camacho."))(&delta.display_text)?;
+                self.next_event_genre = ParserExpectedEvent::BatterUp;
+                Some(Event::FieldingOut)
             }
         };
 
