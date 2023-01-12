@@ -59,9 +59,11 @@ impl Parser {
                     // Ball event
                     let pitcher = self.state.pitcher.as_ref()
                         .ok_or_else(|| anyhow!("Expected non-null pitcher in a Ball event"))?;
-                    // let batter = self.state.batter.as_ref()
-                    //     .ok_or_else(|| anyhow!("Expected non-null batter in a BatterUp event"))?;
-                    let ball_flavor = run_parser(parse_ball(self.state.balls, self.state.strikes, &pitcher.name))(&delta.display_text)?;
+                    let batter = self.state.batter.as_ref()
+                        .ok_or_else(|| anyhow!("Expected non-null batter in a BatterUp event"))?;
+                    let ball_flavor = run_parser(parse_ball(
+                        self.state.balls, self.state.strikes, &pitcher.name, &batter.name
+                    ))(&delta.display_text)?;
                     self.next_event_genre = ParserExpectedEvent::PostPitchEmpty(Event::Ball(ball_flavor));
                     None
                 } else if self.state.strikes == prev_state.strikes + 1 {

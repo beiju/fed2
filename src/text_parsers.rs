@@ -38,7 +38,7 @@ fn count_dot<'a, O, E, F>(balls: i64, strikes: i64, mut child: F) -> impl FnMut(
     }
 }
 
-pub fn parse_ball<'a, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitcher_name: &str) -> impl FnMut(&'a str) -> IResult<&'a str, BallFlavor, E> + '_ {
+pub fn parse_ball<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitcher_name: &'b str, batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, BallFlavor, E> + 'b {
     move |input| {
         alt((
             count(balls, strikes, tag("Ball."))
@@ -49,6 +49,8 @@ pub fn parse_ball<'a, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitcher_
                 .map(|_| BallFlavor::JustOutside),
             count_dot(balls, strikes,pair(tag(pitcher_name), tag(" just misses the zone. Ball,")))
                 .map(|_| BallFlavor::MissesTheZone),
+            count_dot(balls, strikes,pair(tag(batter_name), tag(" does not chase. Ball,")))
+                .map(|_| BallFlavor::DoesNotChase),
             count_dot(balls, strikes,parse_terminated(" pitch. Ball,"))
                 .map(|s| BallFlavor::Adjective(s.to_string())),
         )).parse(input)
@@ -64,6 +66,8 @@ pub fn parse_strike<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pi
                 .map(|_| StrikeFlavor::ThrowsAStrike),
             count_dot(balls, strikes, preceded(tag(batter_name), tag(" is caught looking. Strike,")))
                 .map(|_| StrikeFlavor::CaughtLooking),
+            count_dot(balls, strikes, preceded(tag(batter_name), tag(" chases. Strike,")))
+                .map(|_| StrikeFlavor::Chases),
         )).parse(input)
     }
 }

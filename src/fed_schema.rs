@@ -10,6 +10,7 @@ pub enum BallFlavor {
     JustOutside,
     MissesTheZone,
     Adjective(String),
+    DoesNotChase,
 }
 
 #[derive(Debug)]
@@ -17,6 +18,7 @@ pub enum StrikeFlavor {
     None,
     ThrowsAStrike,
     CaughtLooking,
+    Chases,
 }
 
 #[derive(Debug)]
@@ -52,13 +54,14 @@ impl Event {
                 let count = Count(state.balls, state.strikes);
                 let pitcher = state.pitcher.as_ref()
                     .ok_or_else(|| anyhow!("Expected non-null pitcher in a Ball event"))?;
-                // let batter = state.batter.as_ref()
-                //     .ok_or_else(|| anyhow!("Expected non-null batter in a Ball event"))?;
+                let batter = state.batter.as_ref()
+                    .ok_or_else(|| anyhow!("Expected non-null batter in a Ball event"))?;
                 let text = match flavor {
                     BallFlavor::None => { format!("Ball. {count}")  }
                     BallFlavor::WayOutside => { format!("Ball, way outside. {count}") }
                     BallFlavor::JustOutside => { format!("Ball, just outside. {count}.") }
                     BallFlavor::MissesTheZone => { format!("{} just misses the zone. Ball, {count}.", pitcher.name) }
+                    BallFlavor::DoesNotChase => { format!("{} does not chase. Ball, {count}.", batter.name) }
                     BallFlavor::Adjective(adj) => { format!("{adj} pitch. Ball, {count}.") }
                 };
                 vec![text, String::new()]
@@ -74,6 +77,7 @@ impl Event {
                     StrikeFlavor::None => { format!("Strike, {count}.") }
                     StrikeFlavor::ThrowsAStrike => { format!("{} throws a strike. {count}.", pitcher.name) }
                     StrikeFlavor::CaughtLooking => { format!("{} is caught looking. Strike, {count}.", batter.name) }
+                    StrikeFlavor::Chases => { format!("{} chases. Strike, {count}.", batter.name) }
                 };
                 vec![text, String::new()]
             }
