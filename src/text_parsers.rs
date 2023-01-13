@@ -2,12 +2,13 @@ use anyhow::anyhow;
 use nom::{Finish, IResult, Parser};
 use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_until1};
-use nom::combinator::{fail, recognize, verify};
+use nom::combinator::{fail, opt, recognize, verify};
 use nom::error::ParseError;
 use nom::sequence::{pair, preceded, terminated};
 use nom_supreme::error::{BaseErrorKind, ErrorTree};
 use nom_supreme::final_parser::{final_parser, Location};
-use crate::fed_schema::{BallFlavor, StrikeFlavor};
+use crate::chron_schema::PlayerDesc;
+use crate::fed_schema::*;
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
 pub(crate) type ParserResult<'a, Out, Er> = IResult<&'a str, Out, Er>;
@@ -51,8 +52,8 @@ pub fn parse_ball<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitc
                 .map(|_| BallFlavor::MissesTheZone),
             count_dot(balls, strikes,pair(tag(batter_name), tag(" does not chase. Ball,")))
                 .map(|_| BallFlavor::DoesNotChase),
-            count_dot(balls, strikes,parse_terminated(" pitch. Ball,"))
-                .map(|s| BallFlavor::Adjective(s.to_string())),
+            count_dot(balls, strikes,terminated(parse_pitch_adjective, tag(" pitch. Ball,")))
+                .map(|adj| BallFlavor::Adjective(adj)),
         )).parse(input)
     }
 }
@@ -79,6 +80,135 @@ pub fn parse_strikeout<'a, 'b, E: ParseError<&'a str>>(pitcher_name: &'b str, ba
         let (input, _) = tag(batter_name).parse(input)?;
         let (input, _) = tag(" out.").parse(input)?;
         Ok((input, ()))
+    }
+}
+
+pub fn parse_contact<'a, 'b, E: ParseError<&'a str>>(batter_name: &'b str)
+    -> impl FnMut(&'a str) -> IResult<&'a str, (Option<SoundEffect>, ContactVerb, Option<PitchDescriptor>, FieldLocation), E> + 'b {
+    move |input| {
+        alt((
+            parse_contact_with_sound(batter_name)
+                .map(|(s, v, l)| (Some(s), v, None, l)),
+            parse_contact_without_sound(batter_name)
+                .map(|(v, d, l)| (None, v, Some(d), l)),
+        )).parse(input)
+    }
+}
+
+fn parse_location<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, FieldLocation, E> {
+    alt((
+        tag("the Infield").map(|_| FieldLocation::Infield),
+        tag("Left Field").map(|_| FieldLocation::LeftField),
+        tag("Deep Left Field").map(|_| FieldLocation::DeepLeftField),
+        tag("Center Field").map(|_| FieldLocation::CenterField),
+        tag("Deep Center Field").map(|_| FieldLocation::DeepCenterField),
+        tag("Right Field").map(|_| FieldLocation::RightField),
+        tag("Deep Right Field").map(|_| FieldLocation::DeepRightField),
+        tag("the Wall").map(|_| FieldLocation::Wall),
+    )).parse(input)
+}
+
+fn parse_pitch_adjective<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, PitchAdjective, E> {
+    alt((
+        tag("Auspicious").map(|_| PitchAdjective::Auspicious),
+        tag("Average").map(|_| PitchAdjective::Average),
+        tag("Disgusting").map(|_| PitchAdjective::Disgusting),
+        tag("Dominant").map(|_| PitchAdjective::Dominant),
+        tag("Favorable").map(|_| PitchAdjective::Favorable),
+        tag("Horrible").map(|_| PitchAdjective::Horrible),
+        tag("Marvelous").map(|_| PitchAdjective::Marvelous),
+        tag("Overpowering").map(|_| PitchAdjective::Overpowering),
+        tag("Potent").map(|_| PitchAdjective::Potent),
+        tag("Powerful").map(|_| PitchAdjective::Powerful),
+        tag("Revolting").map(|_| PitchAdjective::Revolting),
+        tag("Well-located").map(|_| PitchAdjective::WellLocated),
+        tag("Well-placed").map(|_| PitchAdjective::WellPlaced),
+    )).parse(input)
+}
+
+pub fn parse_contact_with_sound<'a, 'b, E: ParseError<&'a str>>(batter_name: &'b str)
+    -> impl FnMut(&'a str) -> IResult<&'a str, (SoundEffect, ContactVerb, FieldLocation), E> + 'b {
+    move |input| {
+        let (input, sound_effect) = alt((
+            tag("BAM! ").map(|_| SoundEffect::Bam),
+            tag("BOOM! ").map(|_| SoundEffect::Boom),
+            tag("CRACK! ").map(|_| SoundEffect::Crack),
+            tag("SMACK! ").map(|_| SoundEffect::Smack),
+            tag("SMASH! ").map(|_| SoundEffect::Smash),
+            tag("THWACK! ").map(|_| SoundEffect::Thwack),
+            tag("WHAM! ").map(|_| SoundEffect::Wham),
+        )).parse(input)?;
+        let (input, _) = tag(batter_name).parse(input)?;
+        let (input, _) = tag(" ").parse(input)?;
+        let (input, verb) = parse_contact_verb.parse(input)?;
+        let (input, _) = tag(" it to ").parse(input)?;
+        let (input, location) = parse_location.parse(input)?;
+        let (input, _) = tag("...").parse(input)?;
+        Ok((input, (sound_effect, verb, location)))
+    }
+}
+
+fn parse_contact_verb<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, ContactVerb, E> {
+    alt((
+        tag("bats").map(|_| ContactVerb::Bats),
+        tag("chops").map(|_| ContactVerb::Chops),
+        tag("clips").map(|_| ContactVerb::Clips),
+        tag("drags").map(|_| ContactVerb::Drags),
+        tag("dribbles").map(|_| ContactVerb::Dribbles),
+        tag("hits").map(|_| ContactVerb::Hits),
+        tag("knocks").map(|_| ContactVerb::Knocks),
+        tag("nudges").map(|_| ContactVerb::Nudges),
+        tag("pokes").map(|_| ContactVerb::Pokes),
+        tag("punches").map(|_| ContactVerb::Punches),
+        tag("pushes").map(|_| ContactVerb::Pushes),
+        tag("rolls").map(|_| ContactVerb::Rolls),
+        tag("slaps").map(|_| ContactVerb::Slaps),
+        tag("smacks").map(|_| ContactVerb::Smacks),
+        tag("sputters").map(|_| ContactVerb::Sputters),
+        tag("swats").map(|_| ContactVerb::Swats),
+        tag("taps").map(|_| ContactVerb::Taps),
+        tag("thumps").map(|_| ContactVerb::Thumps),
+        tag("trickles").map(|_| ContactVerb::Trickles),
+        tag("whacks").map(|_| ContactVerb::Whacks),
+    )).parse(input)
+}
+
+pub fn parse_contact_without_sound<'a, 'b, E: ParseError<&'a str>>(batter_name: &'b str)
+    -> impl FnMut(&'a str) -> IResult<&str, (ContactVerb, PitchDescriptor, FieldLocation), E> + 'b {
+    move |input| {
+        let (input, _) = tag(batter_name).parse(input)?;
+        let (input, _) = tag(" ").parse(input)?;
+        let (input, verb) = parse_contact_verb.parse(input)?;
+        let (input, (descriptor, location)) = alt((
+            pair(tag(" it toward ").map(|_| PitchDescriptor::It), parse_location),
+            pair(tag(" one to ").map(|_| PitchDescriptor::One), parse_location),
+            pair(tag(" the ball to ").map(|_| PitchDescriptor::TheBall), parse_location),
+            pair(tag(" the pitch to ").map(|_| PitchDescriptor::ThePitch), parse_location),
+            tag(" the pitch into play").map(|_| (PitchDescriptor::ThePitch, FieldLocation::IntoPlay)),
+        )).parse(input)?;
+        let (input, _) = tag("...").parse(input)?;
+        Ok((input, (verb, descriptor, location)))
+    }
+}
+
+pub fn parse_flyout<'a, 'b, E: ParseError<&'a str>>(defenders: &'b[PlayerDesc])
+    -> impl FnMut(&'a str) -> IResult<&str, &'b PlayerDesc, E> + 'b {
+    move |input| {
+        let (input, _) = tag("Fly out to ").parse(input)?;
+        let (input, defender) = parse_name_from_list(defenders).parse(input)?;
+        let (input, _) = tag(".").parse(input)?;
+        Ok((input, defender))
+    }
+}
+
+pub fn parse_name_from_list<'a, 'b, E: ParseError<&'a str>>(players: &'b[PlayerDesc])
+    -> impl FnMut(&'a str) -> IResult<&str, &'b PlayerDesc, E> + 'b {
+    move |input| {
+        for player in players {
+            let (input, recognized) = opt(tag(player.name.as_str())).parse(input)?;
+            if recognized.is_some() { return Ok((input, player)) }
+        }
+        fail(input)
     }
 }
 

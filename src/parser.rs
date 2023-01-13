@@ -4,9 +4,9 @@ use nom_supreme::error::ErrorTree;
 use nom_supreme::final_parser::{final_parser, Location};
 use nom::Parser as NomParser;
 use nom::sequence::pair;
-use crate::chron_schema::{GameUpdate, GameUpdateDelta, State, TeamAtBat};
-use crate::fed_schema::Event;
-use crate::text_parsers::{parse_ball, parse_strike, parse_strikeout};
+use crate::chron_schema::{GameUpdate, GameUpdateDelta, PlayerDesc, State, TeamAtBat};
+use crate::fed_schema::{Contact, Event};
+use crate::text_parsers::*;
 
 #[derive(Debug, Default)]
 enum ParserExpectedEvent {
@@ -16,7 +16,7 @@ enum ParserExpectedEvent {
     BatterUp,
     Pitch,
     PostPitchEmpty(Event),
-    Contact,
+    Contact(Contact),
 }
 
 #[derive(Debug, Default)]
@@ -39,7 +39,7 @@ impl Parser {
         self.state.update(delta.changed_state);
         let event = match std::mem::replace(&mut self.next_event_genre, ParserExpectedEvent::Invalid) {
             ParserExpectedEvent::Invalid => {
-                return Err(anyhow!("Parser is in the Invalid state"))
+                return Err(anyhow!("Parser is in the Invalid state"));
             }
             ParserExpectedEvent::GameStart => {
                 run_parser(tag("Play Ball!"))(&delta.display_text)?;
@@ -62,7 +62,7 @@ impl Parser {
                     let batter = self.state.batter.as_ref()
                         .ok_or_else(|| anyhow!("Expected non-null batter in a BatterUp event"))?;
                     let ball_flavor = run_parser(parse_ball(
-                        self.state.balls, self.state.strikes, &pitcher.name, &batter.name
+                        self.state.balls, self.state.strikes, &pitcher.name, &batter.name,
                     ))(&delta.display_text)?;
                     self.next_event_genre = ParserExpectedEvent::PostPitchEmpty(Event::Ball(ball_flavor));
                     None
@@ -88,9 +88,19 @@ impl Parser {
                     self.next_event_genre = ParserExpectedEvent::BatterUp;
                     Some(Event::Strikeout(batter.clone()))
                 } else {
-                    // TODO
-                    run_parser(tag("BAM! Ji-Eun Jasper slaps it to Left Field..."))(&delta.display_text)?;
-                    self.next_event_genre = ParserExpectedEvent::Contact;
+                    // Batter gets cleared from current state
+                    let batter = prev_state.batter.as_ref()
+                        .ok_or_else(|| anyhow!("Expected non-null batter before a Contact sub-event"))?;
+
+                    let (sound_effect, verb, pitch_descriptor, location) =
+                        run_parser(parse_contact(&batter.name))(&delta.display_text)?;
+                    self.next_event_genre = ParserExpectedEvent::Contact(Contact {
+                        sound_effect,
+                        batter: batter.clone(),
+                        verb,
+                        pitch_descriptor,
+                        location,
+                    });
                     None
                 }
             }
@@ -100,10 +110,16 @@ impl Parser {
                 self.next_event_genre = ParserExpectedEvent::Pitch;
                 Some(event)
             }
-            ParserExpectedEvent::Contact => {
-                run_parser(tag("Fly out to Jay Camacho."))(&delta.display_text)?;
+            ParserExpectedEvent::Contact(contact) => {
+                let defenders = prev_state.defenders.as_ref()
+                    .ok_or_else(|| anyhow!("Expected non-null defenders after Contact"))?;
+
+                let defender = run_parser(parse_flyout(&defenders))(&delta.display_text)?;
                 self.next_event_genre = ParserExpectedEvent::BatterUp;
-                Some(Event::FieldingOut)
+                Some(Event::FieldingOut {
+                    contact,
+                    defender: defender.clone(),
+                })
             }
         };
 
