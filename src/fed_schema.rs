@@ -207,6 +207,14 @@ impl Display for Contact {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum FoulFlavor {
+    FoulBall,
+    FoulTip,
+    FoulsItBack,
+    FoulsItOff,
+}
+
 #[derive(Debug)]
 pub enum Event {
     PlayBall,
@@ -218,6 +226,7 @@ pub enum Event {
         defender: PlayerDesc,
     },
     Strikeout(PlayerDesc),
+    Foul(FoulFlavor),
 }
 
 struct Count(i64, i64);
@@ -282,6 +291,19 @@ impl Event {
                 vec![
                     format!("{} strikes {} out.", pitcher.name, batter.name)
                 ]
+            }
+            Event::Foul(flavor) => {
+                let count = Count(state.balls, state.strikes);
+                let batter = state.batter.as_ref()
+                    .ok_or_else(|| anyhow!("Expected non-null batter in a Foul event"))?;
+
+                let text = match flavor {
+                    FoulFlavor::FoulBall => { format!("Foul ball. {count}.") }
+                    FoulFlavor::FoulTip => { format!("Foul tip. {count}.") }
+                    FoulFlavor::FoulsItBack => { format!("{} fouls it back. {count}.", batter.name) }
+                    FoulFlavor::FoulsItOff => { format!("{} fouls it off. {count}.", batter.name) }
+                };
+                vec![text, String::new()]
             }
         })
     }

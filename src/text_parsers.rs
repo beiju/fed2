@@ -58,6 +58,20 @@ pub fn parse_ball<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitc
     }
 }
 
+pub enum ParsedStrikeOrFoul {
+    Strike(StrikeFlavor),
+    Foul(FoulFlavor),
+}
+
+pub fn parse_strike_or_foul<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitcher_name: &'b str, batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, ParsedStrikeOrFoul, E> + 'b {
+    move |input| {
+        alt((
+            parse_strike(balls, strikes, pitcher_name, batter_name).map(|res| ParsedStrikeOrFoul::Strike(res)),
+            parse_foul(balls, strikes, batter_name).map(|res| ParsedStrikeOrFoul::Foul(res)),
+        )).parse(input)
+    }
+}
+
 pub fn parse_strike<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitcher_name: &'b str, batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, StrikeFlavor, E> + 'b {
     move |input| {
         alt((
@@ -69,6 +83,21 @@ pub fn parse_strike<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pi
                 .map(|_| StrikeFlavor::CaughtLooking),
             count_dot(balls, strikes, preceded(tag(batter_name), tag(" chases. Strike,")))
                 .map(|_| StrikeFlavor::Chases),
+        )).parse(input)
+    }
+}
+
+pub fn parse_foul<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, FoulFlavor, E> + 'b {
+    move |input| {
+        alt((
+            count_dot(balls, strikes, tag("Foul ball."))
+                .map(|_| FoulFlavor::FoulBall),
+            count_dot(balls, strikes, tag("Foul tip."))
+                .map(|_| FoulFlavor::FoulTip),
+            count_dot(balls, strikes, preceded(tag(batter_name), tag(" fouls it back.")))
+                .map(|_| FoulFlavor::FoulsItBack),
+            count_dot(balls, strikes, preceded(tag(batter_name), tag(" fouls it off.")))
+                .map(|_| FoulFlavor::FoulsItOff),
         )).parse(input)
     }
 }

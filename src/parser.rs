@@ -67,14 +67,18 @@ impl Parser {
                     self.next_event_genre = ParserExpectedEvent::PostPitchEmpty(Event::Ball(ball_flavor));
                     None
                 } else if self.state.strikes == prev_state.strikes + 1 {
-                    // Strike event
+                    // Strike or Foul event
                     let pitcher = self.state.pitcher.as_ref()
-                        .ok_or_else(|| anyhow!("Expected non-null pitcher in a Strike event"))?;
+                        .ok_or_else(|| anyhow!("Expected non-null pitcher in a Strike/Foul event"))?;
                     let batter = self.state.batter.as_ref()
-                        .ok_or_else(|| anyhow!("Expected non-null batter in a Strike event"))?;
+                        .ok_or_else(|| anyhow!("Expected non-null batter in a Strike/Foul event"))?;
 
-                    let strike_flavor = run_parser(parse_strike(self.state.balls, self.state.strikes, &pitcher.name, &batter.name))(&delta.display_text)?;
-                    self.next_event_genre = ParserExpectedEvent::PostPitchEmpty(Event::Strike(strike_flavor));
+                    let parsed = run_parser(parse_strike_or_foul(self.state.balls, self.state.strikes, &pitcher.name, &batter.name))(&delta.display_text)?;
+                    let event = match parsed {
+                        ParsedStrikeOrFoul::Strike(flavor) => { Event::Strike(flavor) }
+                        ParsedStrikeOrFoul::Foul(flavor) => { Event::Foul(flavor) }
+                    };
+                    self.next_event_genre = ParserExpectedEvent::PostPitchEmpty(event);
                     None
                 } else if self.state.outs == prev_state.outs + 1 {
                     // The only way to get an out without an intermediate event is a strikeout
