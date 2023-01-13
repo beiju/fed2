@@ -42,7 +42,9 @@ impl Display for PitchAdjective {
 
 #[derive(Debug, Copy, Clone)]
 pub enum BallFlavor {
-    None,
+    // whyyyyyy
+    BallPeriod,
+    BallComma,
     WayOutside,
     JustOutside,
     MissesTheZone,
@@ -53,6 +55,7 @@ pub enum BallFlavor {
 #[derive(Debug, Copy, Clone)]
 pub enum StrikeFlavor {
     None,
+    Looking,
     ThrowsAStrike,
     CaughtLooking,
     Chases,
@@ -155,7 +158,6 @@ impl Display for PitchDescriptor {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum FieldLocation {
-    IntoPlay,
     Infield,
     LeftField,
     DeepLeftField,
@@ -169,7 +171,6 @@ pub enum FieldLocation {
 impl Display for FieldLocation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            FieldLocation::IntoPlay => { write!(f, "into play") }
             FieldLocation::Infield => { write!(f, "the Infield") }
             FieldLocation::LeftField => { write!(f, "Left Field") }
             FieldLocation::DeepLeftField => { write!(f, "Deep Left Field") }
@@ -182,27 +183,80 @@ impl Display for FieldLocation {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum ContactAdjective {
+    Decent,
+    Depressing,
+    Hard,
+    Sad,
+    Solid,
+    Strong,
+    Weak,
+}
+
+impl Display for ContactAdjective {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContactAdjective::Decent => { write!(f, "decent") }
+            ContactAdjective::Depressing => { write!(f, "depressing") }
+            ContactAdjective::Hard => { write!(f, "hard") }
+            ContactAdjective::Sad => { write!(f, "sad") }
+            ContactAdjective::Solid => { write!(f, "solid") }
+            ContactAdjective::Strong => { write!(f, "strong") }
+            ContactAdjective::Weak => { write!(f, "weak") }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ContactFlavor {
+    NamedWithSound {
+        sound_effect: SoundEffect,
+        verb: ContactVerb,
+    },
+    Named {
+        verb: ContactVerb,
+        pitch_descriptor: PitchDescriptor,
+    },
+    Adjective {
+        adjective: ContactAdjective,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Contact {
-    pub sound_effect: Option<SoundEffect>,
     pub batter: PlayerDesc,
-    pub verb: ContactVerb,
-    pub pitch_descriptor: Option<PitchDescriptor>,
-    pub location: FieldLocation,
+    pub location: Option<FieldLocation>,
+    pub flavor: ContactFlavor
 }
 
 impl Display for Contact {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(sound_effect) = self.sound_effect {
-            write!(f, "{sound_effect}! ")?;
-        }
-
-        if self.location == FieldLocation::IntoPlay {
-            write!(f, "{} {} into play...", self.batter.name, self.verb)
-        } else if let Some(descriptor) = self.pitch_descriptor {
-            write!(f, "{} {} {} {}...", self.batter.name, self.verb, descriptor, self.location)
-        } else {
-            write!(f, "{} {} it to {}...", self.batter.name, self.verb, self.location)
+        match self.flavor {
+            ContactFlavor::NamedWithSound { sound_effect, verb } => {
+                write!(f, "{sound_effect}! {} {verb} it ", self.batter.name)?;
+                if let Some(location) = self.location {
+                    write!(f, "to {location}...")
+                } else {
+                    write!(f, "into play...")
+                }
+            }
+            ContactFlavor::Named { verb, pitch_descriptor } => {
+                write!(f, "{} {verb} ", self.batter.name)?;
+                if let Some(location) = self.location {
+                    write!(f, "{pitch_descriptor} {location}...")
+                } else {
+                    write!(f, "it into play...")
+                }
+            }
+            ContactFlavor::Adjective { adjective } => {
+                write!(f, "A {adjective} hit ")?;
+                if let Some(location) = self.location {
+                    write!(f, "to {location}...")
+                } else {
+                    write!(f, "into play...")
+                }
+            }
         }
     }
 }
@@ -255,7 +309,8 @@ impl Event {
                 let batter = state.batter.as_ref()
                     .ok_or_else(|| anyhow!("Expected non-null batter in a Ball event"))?;
                 let text = match flavor {
-                    BallFlavor::None => { format!("Ball. {count}")  }
+                    BallFlavor::BallPeriod => { format!("Ball. {count}")  }
+                    BallFlavor::BallComma => { format!("Ball, {count}")  }
                     BallFlavor::WayOutside => { format!("Ball, way outside. {count}") }
                     BallFlavor::JustOutside => { format!("Ball, just outside. {count}.") }
                     BallFlavor::MissesTheZone => { format!("{} just misses the zone. Ball, {count}.", pitcher.name) }
@@ -273,6 +328,7 @@ impl Event {
 
                 let text = match flavor {
                     StrikeFlavor::None => { format!("Strike, {count}.") }
+                    StrikeFlavor::Looking => { format!("Strike, looking. {count}.") }
                     StrikeFlavor::ThrowsAStrike => { format!("{} throws a strike. {count}.", pitcher.name) }
                     StrikeFlavor::CaughtLooking => { format!("{} is caught looking. Strike, {count}.", batter.name) }
                     StrikeFlavor::Chases => { format!("{} chases. Strike, {count}.", batter.name) }

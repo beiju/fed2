@@ -96,13 +96,11 @@ impl Parser {
                     let batter = prev_state.batter.as_ref()
                         .ok_or_else(|| anyhow!("Expected non-null batter before a Contact sub-event"))?;
 
-                    let (sound_effect, verb, pitch_descriptor, location) =
+                    let (flavor, location) =
                         run_parser(parse_contact(&batter.name))(&delta.display_text)?;
                     self.next_event_genre = ParserExpectedEvent::Contact(Contact {
-                        sound_effect,
                         batter: batter.clone(),
-                        verb,
-                        pitch_descriptor,
+                        flavor,
                         location,
                     });
                     None

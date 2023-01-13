@@ -28,7 +28,7 @@ async fn async_main() -> anyhow::Result<()> {
         let mut group = group.collect_vec();
         group.sort_by_key(|item| item.data.display_order);
         for game in group {
-            println!("For game {}", game.game_id);
+            println!("For game {} at {}", game.game_id, game.timestamp);
             println!("    Input: {:?}", game.data);
 
             let mut parser = game_parsers.entry(game.game_id).or_default();
