@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use uuid::Uuid;
@@ -15,6 +16,12 @@ pub enum TeamAtBat {
 pub struct PlayerDesc {
     pub id: Uuid,
     pub name: String,
+}
+
+impl Display for PlayerDesc {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name.replace('\'', "&#x27;"))
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

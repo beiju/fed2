@@ -5,7 +5,7 @@ use nom_supreme::final_parser::{final_parser, Location};
 use nom::Parser as NomParser;
 use nom::sequence::pair;
 use crate::chron_schema::{GameUpdate, GameUpdateDelta, PlayerDesc, State, TeamAtBat};
-use crate::fed_schema::{Contact, Event, FailedFielding, Fielding};
+use crate::fed_schema::{Contact, Event, FailedFielding, Fielding, MaybeFailedFielding};
 use crate::text_parsers::*;
 
 #[derive(Debug, Default)]
@@ -186,21 +186,25 @@ impl Parser {
                         flavor: fielding.flavor,
                     })
                 } else {
-                    todo!()
+                    self.parse_hit(&delta.display_text, contact, fielding)?
                 }
             }
             ParserExpectedEvent::FailedFielding(contact, fielding) => {
-                let (hit_type, flavor) = run_parser(parse_base_hit(&contact.batter.name))(&delta.display_text)?;
-                self.next_event_genre = ParserExpectedEvent::BatterUp;
-                Some(Event::Hit {
-                    contact,
-                    fielding,
-                    hit_type,
-                    flavor,
-                })
+                self.parse_hit(&delta.display_text, contact, fielding)?
             }
         };
 
         Ok((event, &self.state))
+    }
+
+    fn parse_hit(&mut self, display_text: &str, contact: Contact, fielding: impl Into<MaybeFailedFielding>) -> anyhow::Result<Option<Event>> {
+        let (hit_type, flavor) = run_parser(parse_base_hit(&contact.batter.name))(display_text)?;
+        self.next_event_genre = ParserExpectedEvent::BatterUp;
+        Ok(Some(Event::Hit {
+            contact,
+            fielding: fielding.into(),
+            hit_type,
+            flavor,
+        }))
     }
 }

@@ -109,6 +109,8 @@ pub fn parse_strike<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pi
                 .map(|_| StrikeFlavor::GuessesWrong),
             count_dot(balls, strikes, parse_swing_with_adjective(batter_name))
                 .map(|adj| StrikeFlavor::AdjectiveSwing(adj)),
+            count_dot(balls, strikes, preceded(tag(pitcher_name), tag(" drops it in. Strike,")))
+                .map(|_| StrikeFlavor::DropsItIn),
         )).parse(input)
     }
 }
@@ -502,11 +504,23 @@ pub fn parse_makes_catch_with_adjective<'a, 'b, E: ParseError<&'a str>>(
     }
 }
 
-pub fn parse_name_from_list<'a, 'b, E: ParseError<&'a str>>(players: &'b [PlayerDesc])
-                                                            -> impl FnMut(&'a str) -> IResult<&str, &'b PlayerDesc, E> + 'b {
+pub fn parse_player_name<'a, 'b, E: ParseError<&'a str>>(
+    player: &'b PlayerDesc
+) -> impl FnMut(&'a str) -> IResult<&str, (), E> + 'b {
+    move |input| {
+        // You could do this without allocating by splitting the name by quote marks and then
+        // matching the segments one by one, but I'm being lazy
+        let (input, _) = tag(player.name.replace('\'', "&#x27;").as_str()).parse(input)?;
+
+        Ok((input, ()))
+    }
+}
+pub fn parse_name_from_list<'a, 'b, E: ParseError<&'a str>>(
+    players: &'b [PlayerDesc]
+) -> impl FnMut(&'a str) -> IResult<&str, &'b PlayerDesc, E> + 'b {
     move |input| {
         for player in players {
-            let (input, recognized) = opt(tag(player.name.as_str())).parse(input)?;
+            let (input, recognized) = opt(parse_player_name(player)).parse(input)?;
             if recognized.is_some() { return Ok((input, player)); }
         }
         fail(input)

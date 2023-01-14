@@ -1,4 +1,4 @@
-use std::fmt::{Display, Formatter, write};
+use std::fmt::{Debug, Display, Formatter, write};
 use anyhow::anyhow;
 use uuid::Uuid;
 use crate::chron_schema::{GameUpdate, PlayerDesc, State, TeamAtBat};
@@ -88,7 +88,8 @@ pub enum StrikeFlavor {
     CaughtLooking,
     Chases,
     GuessesWrong,
-    AdjectiveSwing(SwingAdjective)
+    AdjectiveSwing(SwingAdjective),
+    DropsItIn,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -264,7 +265,7 @@ impl Display for Contact {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.flavor {
             ContactFlavor::NamedWithSound { sound_effect, verb } => {
-                write!(f, "{sound_effect}! {} {verb} it ", self.batter.name)?;
+                write!(f, "{sound_effect}! {} {verb} it ", self.batter)?;
                 if let Some(location) = self.location {
                     write!(f, "to {location}...")
                 } else {
@@ -272,7 +273,7 @@ impl Display for Contact {
                 }
             }
             ContactFlavor::Named { verb, pitch_descriptor } => {
-                write!(f, "{} {verb} ", self.batter.name)?;
+                write!(f, "{} {verb} ", self.batter)?;
                 if let Some(location) = self.location {
                     write!(f, "{pitch_descriptor} {location}...")
                 } else {
@@ -411,7 +412,7 @@ pub struct Fielding {
 
 impl Display for Fielding {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.defender.name, self.flavor)
+        write!(f, "{} {}", self.defender, self.flavor)
     }
 }
 
@@ -458,7 +459,7 @@ pub struct FailedFielding {
 
 impl Display for FailedFielding {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.defender.name, self.flavor)
+        write!(f, "{} {}", self.defender, self.flavor)
     }
 }
 
@@ -500,6 +501,33 @@ impl Display for HitFlavor {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum MaybeFailedFielding {
+    Fielding(Fielding),
+    FailedFielding(FailedFielding),
+}
+
+impl Display for MaybeFailedFielding {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MaybeFailedFielding::Fielding(fielding) => { write!(f, "{fielding}") }
+            MaybeFailedFielding::FailedFielding(fielding) => { write!(f, "{fielding}") }
+        }
+    }
+}
+
+impl Into<MaybeFailedFielding> for Fielding {
+    fn into(self) -> MaybeFailedFielding {
+        MaybeFailedFielding::Fielding(self)
+    }
+}
+
+impl Into<MaybeFailedFielding> for FailedFielding {
+    fn into(self) -> MaybeFailedFielding {
+        MaybeFailedFielding::FailedFielding(self)
+    }
+}
+
 #[derive(Debug)]
 pub enum Event {
     PlayBall,
@@ -526,7 +554,7 @@ pub enum Event {
     },
     Hit {
         contact: Contact,
-        fielding: FailedFielding, // TODO Not always failed
+        fielding: MaybeFailedFielding,
         hit_type: HitType,
         flavor: HitFlavor,
     }
@@ -549,7 +577,7 @@ impl Event {
             Event::BatterUp => {
                 let batter = state.batter.as_ref()
                     .ok_or_else(|| anyhow!("Expected non-null batter in BatterUp event"))?;
-                vec![format!("{} steps up to bat.", batter.name)]
+                vec![format!("{} steps up to bat.", batter)]
             }
             Event::Ball(flavor) => {
                 let count = Count(state.balls, state.strikes);
@@ -563,16 +591,16 @@ impl Event {
                     BallFlavor::WayOutside => { format!("Ball, way outside. {count}") }
                     BallFlavor::JustOutside => { format!("Ball, just outside. {count}.") }
                     BallFlavor::ExtremelyOutside => { format!("Ball, extremely outside. {count}.") }
-                    BallFlavor::MissesTheZone => { format!("{} misses the zone. {count}.", pitcher.name) }
-                    BallFlavor::DoesNotChase => { format!("{} does not chase. Ball, {count}.", batter.name) }
+                    BallFlavor::MissesTheZone => { format!("{} misses the zone. {count}.", pitcher) }
+                    BallFlavor::DoesNotChase => { format!("{} does not chase. Ball, {count}.", batter) }
                     BallFlavor::Adjective(adj) => { format!("{adj} pitch. Ball, {count}.") }
-                    BallFlavor::DoesntBlink => { format!("{} doesn't blink. {count}.", batter.name) }
-                    BallFlavor::JustMisses => { format!("{} just misses the zone. Ball, {count}.", pitcher.name) }
-                    BallFlavor::LaysOffOutside => { format!("{} lays off outside. {count}.", pitcher.name) }
-                    BallFlavor::LooksAtBallOutside => { format!("{} looks at a ball outside. {count}.", batter.name) }
-                    BallFlavor::MissesBigTime => { format!("{} misses big time. {count}.", pitcher.name) }
-                    BallFlavor::Stumbles => { format!("{} stumbles. {count}.", pitcher.name) }
-                    BallFlavor::ThrowsOutside => { format!("{} throws it outside. Ball, {count}.", pitcher.name) }
+                    BallFlavor::DoesntBlink => { format!("{} doesn't blink. {count}.", batter) }
+                    BallFlavor::JustMisses => { format!("{} just misses the zone. Ball, {count}.", pitcher) }
+                    BallFlavor::LaysOffOutside => { format!("{} lays off outside. {count}.", pitcher) }
+                    BallFlavor::LooksAtBallOutside => { format!("{} looks at a ball outside. {count}.", batter) }
+                    BallFlavor::MissesBigTime => { format!("{} misses big time. {count}.", pitcher) }
+                    BallFlavor::Stumbles => { format!("{} stumbles. {count}.", pitcher) }
+                    BallFlavor::ThrowsOutside => { format!("{} throws it outside. Ball, {count}.", pitcher) }
                 };
                 vec![text, String::new()]
             }
@@ -587,20 +615,21 @@ impl Event {
                     StrikeFlavor::None => { format!("Strike, {count}.") }
                     StrikeFlavor::Looking => { format!("Strike, looking. {count}.") }
                     StrikeFlavor::Swinging => { format!("Strike, swinging. {count}.") }
-                    StrikeFlavor::ThrowsAStrike => { format!("{} throws a strike. {count}.", pitcher.name) }
-                    StrikeFlavor::CaughtLooking => { format!("{} is caught looking. Strike, {count}.", batter.name) }
-                    StrikeFlavor::Chases => { format!("{} chases. Strike, {count}.", batter.name) }
-                    StrikeFlavor::GuessesWrong => { format!("{} guesses wrong. Strike, {count}.", batter.name) }
-                    StrikeFlavor::AdjectiveSwing(adj) => { format!("{} takes a {adj} swing. Strike, {count}.", batter.name) }
+                    StrikeFlavor::ThrowsAStrike => { format!("{} throws a strike. {count}.", pitcher) }
+                    StrikeFlavor::CaughtLooking => { format!("{} is caught looking. Strike, {count}.", batter) }
+                    StrikeFlavor::Chases => { format!("{} chases. Strike, {count}.", batter) }
+                    StrikeFlavor::GuessesWrong => { format!("{} guesses wrong. Strike, {count}.", batter) }
+                    StrikeFlavor::AdjectiveSwing(adj) => { format!("{} takes a {adj} swing. Strike, {count}.", batter) }
+                    StrikeFlavor::DropsItIn => { format!("{} drops it in. Strike, {count}.", pitcher) }
                 };
                 vec![text, String::new()]
             }
             Event::Flyout { contact, defender, flavor } => {
                 let flyout_text = match flavor {
-                    FlyoutFlavor::FlyOutTo => { format!("Fly out to {}.", defender.name) }
-                    FlyoutFlavor::IsRightThere => { format!("{} is right there to make the catch.", defender.name) }
-                    FlyoutFlavor::MakesCatch => { format!("{} makes the catch.", defender.name) }
-                    FlyoutFlavor::MakesCatchWithAdjective(adj) => { format!("{} makes a {adj} catch.", defender.name) }
+                    FlyoutFlavor::FlyOutTo => { format!("Fly out to {}.", defender) }
+                    FlyoutFlavor::IsRightThere => { format!("{} is right there to make the catch.", defender) }
+                    FlyoutFlavor::MakesCatch => { format!("{} makes the catch.", defender) }
+                    FlyoutFlavor::MakesCatchWithAdjective(adj) => { format!("{} makes a {adj} catch.", defender) }
                 };
                 vec![contact.to_string(), flyout_text]
             }
@@ -608,8 +637,8 @@ impl Event {
                 let pitcher = state.pitcher.as_ref()
                     .ok_or_else(|| anyhow!("Expected non-null pitcher in a Strikeout event"))?;
                 let text = match flavor {
-                    StrikeoutFlavor::NamedBoth => { format!("{} strikes {} out.", pitcher.name, batter.name) }
-                    StrikeoutFlavor::NamedBatter => { format!("{} strikes out.", batter.name) }
+                    StrikeoutFlavor::NamedBoth => { format!("{} strikes {} out.", pitcher, batter) }
+                    StrikeoutFlavor::NamedBatter => { format!("{} strikes out.", batter) }
                 };
                 vec![text]
             }
@@ -621,22 +650,22 @@ impl Event {
                 let text = match flavor {
                     FoulFlavor::FoulBall => { format!("Foul ball. {count}.") }
                     FoulFlavor::FoulTip => { format!("Foul tip. {count}.") }
-                    FoulFlavor::FoulsItBack => { format!("{} fouls it back. {count}.", batter.name) }
-                    FoulFlavor::FoulsItOff => { format!("{} fouls it off. {count}.", batter.name) }
+                    FoulFlavor::FoulsItBack => { format!("{} fouls it back. {count}.", batter) }
+                    FoulFlavor::FoulsItOff => { format!("{} fouls it off. {count}.", batter) }
                 };
                 vec![text, String::new()]
             }
             Event::GroundOut { contact, defender, flavor } => {
                 vec![
                     contact.to_string(),
-                    format!("{} {flavor}", defender.name),
-                    format!("Groundout to {}.", defender.name),
+                    format!("{} {flavor}", defender),
+                    format!("Groundout to {}.", defender),
                 ]
             }
             Event::HomeRun { contact } => {
                 vec![
                     contact.to_string(),
-                    format!("{} hits a Home Run!", contact.batter.name),
+                    format!("{} hits a Home Run!", contact.batter),
                     String::new(),
                 ]
             }
@@ -644,7 +673,7 @@ impl Event {
                 vec![
                     contact.to_string(),
                     fielding.to_string(),
-                    format!("{} {} {}!", contact.batter.name, flavor, hit_type),
+                    format!("{} {} {}!", contact.batter, flavor, hit_type),
                 ]
             }
         })
