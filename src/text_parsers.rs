@@ -261,13 +261,137 @@ pub fn parse_contact_with_adjective<'a, E: ParseError<&'a str>>(
     Ok((input, (adjective, location)))
 }
 
-pub fn parse_flyout<'a, 'b, E: ParseError<&'a str>>(defenders: &'b [PlayerDesc])
-                                                    -> impl FnMut(&'a str) -> IResult<&str, &'b PlayerDesc, E> + 'b {
+pub fn parse_flyout<'a, 'b, E: ParseError<&'a str>>(
+    defenders: &'b [PlayerDesc]
+) -> impl FnMut(&'a str) -> IResult<&str, (&'b PlayerDesc, FlyoutFlavor), E> + 'b {
+    move |input| {
+        alt((
+            parse_fly_out_to(defenders)
+                .map(|defender| (defender, FlyoutFlavor::FlyOutTo)),
+            parse_makes_the_catch(defenders, " makes the catch.")
+                .map(|defender| (defender, FlyoutFlavor::MakesCatch)),
+            parse_makes_the_catch(defenders, " is right there to make the catch.")
+                .map(|defender| (defender, FlyoutFlavor::IsRightThere)),
+            parse_makes_catch_with_adjective(defenders)
+                .map(|(defender, adjective)| (defender, FlyoutFlavor::MakesCatchWithAdjective(adjective))),
+        )).parse(input)
+    }
+}
+
+pub fn parse_fly_out_to<'a, 'b, E: ParseError<&'a str>>(
+    defenders: &'b [PlayerDesc]
+) -> impl FnMut(&'a str) -> IResult<&str, &'b PlayerDesc, E> + 'b {
     move |input| {
         let (input, _) = tag("Fly out to ").parse(input)?;
         let (input, defender) = parse_name_from_list(defenders).parse(input)?;
         let (input, _) = tag(".").parse(input)?;
         Ok((input, defender))
+    }
+}
+
+pub fn parse_makes_the_catch<'a, 'b, E: ParseError<&'a str>>(
+    defenders: &'b [PlayerDesc],
+    suffix: &'static str,
+) -> impl FnMut(&'a str) -> IResult<&str, &'b PlayerDesc, E> + 'b {
+    move |input| {
+        let (input, defender) = parse_name_from_list(defenders).parse(input)?;
+        let (input, _) = tag(suffix).parse(input)?;
+        Ok((input, defender))
+    }
+}
+
+pub enum ParsedPostContact<'a> {
+    Fielding((&'a PlayerDesc, FieldingFlavor)),
+    HomeRun
+}
+
+pub fn parse_post_contact<'a, 'b, E: ParseError<&'a str>>(
+    batter: &'b PlayerDesc,
+    defenders: &'b [PlayerDesc],
+) -> impl FnMut(&'a str) -> IResult<&str, ParsedPostContact<'b>, E> + 'b {
+    move |input| {
+        alt((
+            pair(tag(batter.name.as_str()), tag(" hits a Home Run!"))
+                .map(|_| ParsedPostContact::HomeRun),
+            parse_fielding(defenders)
+                .map(|res| ParsedPostContact::Fielding(res)),
+        )).parse(input)
+    }
+}
+
+pub fn parse_fielding<'a, 'b, E: ParseError<&'a str>>(
+    defenders: &'b [PlayerDesc],
+) -> impl FnMut(&'a str) -> IResult<&str, (&'b PlayerDesc, FieldingFlavor), E> + 'b {
+    move |input| {
+        let (input, defender) = parse_name_from_list(defenders).parse(input)?;
+        let (input, _) = tag(" ").parse(input)?;
+        let (input, flavor) = parse_fielding_flavor.parse(input)?;
+        let (input, _) = tag("...").parse(input)?;
+        Ok((input, (defender, flavor)))
+    }
+}
+
+fn parse_catch_adjective<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, CatchAdjective, E> {
+    alt((
+        tag("cool").map(|_| CatchAdjective::Cool),
+        tag("decent").map(|_| CatchAdjective::Decent),
+        tag("diving").map(|_| CatchAdjective::Diving),
+        tag("fine").map(|_| CatchAdjective::Fine),
+        tag("good").map(|_| CatchAdjective::Good),
+        tag("lazy").map(|_| CatchAdjective::Lazy),
+        tag("nice").map(|_| CatchAdjective::Nice),
+        tag("poor").map(|_| CatchAdjective::Poor),
+        tag("satisfactory").map(|_| CatchAdjective::Satisfactory),
+        tag("simple").map(|_| CatchAdjective::Simple),
+        tag("solid").map(|_| CatchAdjective::Solid),
+    )).parse(input)
+}
+
+fn parse_fielding_flavor<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, FieldingFlavor, E> {
+    // There's so many of these I need a nested alt
+    let alt1 = alt((
+        tag("charges for it").map(|_| FieldingFlavor::ChargesForIt),
+        tag("collects it").map(|_| FieldingFlavor::CollectsIt),
+        tag("corrals it").map(|_| FieldingFlavor::CorralsIt),
+        tag("dashes for it").map(|_| FieldingFlavor::DashesForIt),
+        tag("dives for it").map(|_| FieldingFlavor::DivesForIt),
+        tag("fields it").map(|_| FieldingFlavor::FieldsIt),
+        tag("gets in front of it").map(|_| FieldingFlavor::GetsInFrontOfIt),
+        tag("gets it").map(|_| FieldingFlavor::GetsIt),
+        tag("goes for it").map(|_| FieldingFlavor::GoesForIt),
+        tag("has a bead on it").map(|_| FieldingFlavor::HasABeadOnIt),
+        tag("is there to collect it").map(|_| FieldingFlavor::IsThereToCollectIt),
+        tag("is there to corral it").map(|_| FieldingFlavor::IsThereToCorralIt),
+        tag("is there to field it").map(|_| FieldingFlavor::IsThereToFieldIt),
+        tag("is there to get it").map(|_| FieldingFlavor::IsThereToGetIt),
+    ));
+    let alt2 = alt((
+        tag("is there to scoop it").map(|_| FieldingFlavor::IsThereToScoopIt),
+        tag("is there to secure it").map(|_| FieldingFlavor::IsThereToSecureIt),
+        tag("lurches for it").map(|_| FieldingFlavor::LurchesForIt),
+        tag("races for it").map(|_| FieldingFlavor::RacesForIt),
+        tag("races in").map(|_| FieldingFlavor::RacesIn),
+        tag("races toward it").map(|_| FieldingFlavor::RacesTowardIt),
+        tag("reaches for it").map(|_| FieldingFlavor::ReachesForIt),
+        tag("runs for it").map(|_| FieldingFlavor::RunsForIt),
+        tag("scoops it").map(|_| FieldingFlavor::ScoopsIt),
+        tag("secures it").map(|_| FieldingFlavor::SecuresIt),
+        tag("tracks it down").map(|_| FieldingFlavor::TracksItDown),
+        tag("tries for it").map(|_| FieldingFlavor::TriesForIt),
+    ));
+
+    alt((alt1, alt2)).parse(input)
+}
+
+pub fn parse_makes_catch_with_adjective<'a, 'b, E: ParseError<&'a str>>(
+    defenders: &'b [PlayerDesc]
+) -> impl FnMut(&'a str) -> IResult<&str, (&'b PlayerDesc, CatchAdjective), E> + 'b {
+    move |input| {
+        let (input, defender) = parse_name_from_list(defenders).parse(input)?;
+        let (input, _) = tag(" makes a ").parse(input)?;
+        let (input, adjective) = parse_catch_adjective.parse(input)?;
+        let (input, _) = tag(if adjective == CatchAdjective::Diving { " catch!" } else { " catch." }).parse(input)?;
+        Ok((input, (defender, adjective)))
     }
 }
 
@@ -279,6 +403,17 @@ pub fn parse_name_from_list<'a, 'b, E: ParseError<&'a str>>(players: &'b [Player
             if recognized.is_some() { return Ok((input, player)); }
         }
         fail(input)
+    }
+}
+
+pub fn parse_groundout<'a, 'b, E: ParseError<&'a str>>(
+    defender: &'b PlayerDesc,
+) -> impl FnMut(&'a str) -> IResult<&str, (), E> + 'b {
+    move |input| {
+        let (input, _) = tag("Groundout to ").parse(input)?;
+        let (input, _) = tag(defender.name.as_str()).parse(input)?;
+        let (input, _) = tag(".").parse(input)?;
+        Ok((input, ()))
     }
 }
 

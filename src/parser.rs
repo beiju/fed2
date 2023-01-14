@@ -5,7 +5,7 @@ use nom_supreme::final_parser::{final_parser, Location};
 use nom::Parser as NomParser;
 use nom::sequence::pair;
 use crate::chron_schema::{GameUpdate, GameUpdateDelta, PlayerDesc, State, TeamAtBat};
-use crate::fed_schema::{Contact, Event};
+use crate::fed_schema::{Contact, Event, Fielding};
 use crate::text_parsers::*;
 
 #[derive(Debug, Default)]
@@ -16,7 +16,9 @@ enum ParserExpectedEvent {
     BatterUp,
     Pitch,
     PostPitchEmpty(Event),
+    PostAppearanceEmpty(Event),
     Contact(Contact),
+    Fielding(Contact, Fielding),
 }
 
 #[derive(Debug, Default)]
@@ -112,16 +114,64 @@ impl Parser {
                 self.next_event_genre = ParserExpectedEvent::Pitch;
                 Some(event)
             }
-            ParserExpectedEvent::Contact(contact) => {
-                let defenders = prev_state.defenders.as_ref()
-                    .ok_or_else(|| anyhow!("Expected non-null defenders after Contact"))?;
+            ParserExpectedEvent::PostAppearanceEmpty(event) => {
+                run_parser(tag(""))(&delta.display_text)?;
 
-                let defender = run_parser(parse_flyout(&defenders))(&delta.display_text)?;
                 self.next_event_genre = ParserExpectedEvent::BatterUp;
-                Some(Event::FieldingOut {
-                    contact,
-                    defender: defender.clone(),
-                })
+                Some(event)
+            }
+            ParserExpectedEvent::Contact(contact) => {
+                if self.state.outs == prev_state.outs + 1 {
+                    let defenders = prev_state.defenders.as_ref()
+                        .ok_or_else(|| anyhow!("Expected non-null defenders after Contact"))?;
+
+                    let (defender, flavor) = run_parser(parse_flyout(&defenders))(&delta.display_text)?;
+                    self.next_event_genre = ParserExpectedEvent::BatterUp;
+                    Some(Event::Flyout {
+                        contact,
+                        defender: defender.clone(),
+                        flavor,
+                    })
+                } else {
+                    let batter = prev_state.batter.as_ref()
+                        .ok_or_else(|| anyhow!("Expected non-null batter after Contact"))?;
+                    let defenders = prev_state.defenders.as_ref()
+                        .ok_or_else(|| anyhow!("Expected non-null defenders after Contact"))?;
+
+                    let parsed = run_parser(parse_post_contact(&batter, &defenders))(&delta.display_text)?;
+                    match parsed {
+                        ParsedPostContact::HomeRun => {
+                            // TODO If there are runners, expect scores
+                            self.next_event_genre = ParserExpectedEvent::PostAppearanceEmpty(Event::HomeRun {
+                                contact,
+                                batter: batter.clone()
+                            });
+                            None
+                        }
+                        ParsedPostContact::Fielding((defender, flavor)) => {
+                            self.next_event_genre = ParserExpectedEvent::Fielding(contact, Fielding {
+                                defender: defender.clone(),
+                                flavor,
+                            });
+                            None
+
+                        }
+                    }
+                }
+            }
+            ParserExpectedEvent::Fielding(contact, fielding) => {
+                if self.state.outs == prev_state.outs + 1 {
+                    // Fielding out
+                    run_parser(parse_groundout(&fielding.defender))(&delta.display_text)?;
+                    self.next_event_genre = ParserExpectedEvent::BatterUp;
+                    Some(Event::GroundOut {
+                        contact,
+                        defender: fielding.defender,
+                        flavor: fielding.flavor,
+                    })
+                } else {
+                    todo!()
+                }
             }
         };
 

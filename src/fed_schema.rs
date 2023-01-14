@@ -246,7 +246,7 @@ impl Display for Contact {
                 if let Some(location) = self.location {
                     write!(f, "{pitch_descriptor} {location}...")
                 } else {
-                    write!(f, "it into play...")
+                    write!(f, "the pitch into play...")
                 }
             }
             ContactFlavor::Adjective { adjective } => {
@@ -269,18 +269,138 @@ pub enum FoulFlavor {
     FoulsItOff,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum CatchAdjective {
+    Cool,
+    Decent,
+    Diving,
+    Fine,
+    Good,
+    Lazy,
+    Nice,
+    Poor,
+    Satisfactory,
+    Simple,
+    Solid,
+}
+
+impl Display for CatchAdjective {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CatchAdjective::Cool => { write!(f, "cool") }
+            CatchAdjective::Decent => { write!(f, "decent") }
+            CatchAdjective::Diving => { write!(f, "diving") }
+            CatchAdjective::Fine => { write!(f, "fine") }
+            CatchAdjective::Good => { write!(f, "good") }
+            CatchAdjective::Lazy => { write!(f, "lazy") }
+            CatchAdjective::Nice => { write!(f, "nice") }
+            CatchAdjective::Poor => { write!(f, "poor") }
+            CatchAdjective::Satisfactory => { write!(f, "satisfactory") }
+            CatchAdjective::Simple => { write!(f, "simple") }
+            CatchAdjective::Solid => { write!(f, "solid") }
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum FlyoutFlavor {
+    FlyOutTo,
+    IsRightThere,
+    MakesCatch,
+    MakesCatchWithAdjective(CatchAdjective)
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum FieldingFlavor {
+    ChargesForIt,
+    CollectsIt,
+    CorralsIt,
+    DashesForIt,
+    DivesForIt, // can this precede a flyout?
+    FieldsIt,
+    GetsInFrontOfIt,
+    GetsIt,
+    GoesForIt,
+    HasABeadOnIt,
+    IsThereToCollectIt,
+    IsThereToCorralIt,
+    IsThereToFieldIt,
+    IsThereToGetIt,
+    IsThereToScoopIt,
+    IsThereToSecureIt,
+    LurchesForIt,
+    RacesForIt,
+    RacesIn,
+    RacesTowardIt,
+    ReachesForIt,
+    RunsForIt,
+    ScoopsIt,
+    SecuresIt,
+    TracksItDown,
+    TriesForIt,
+}
+
+impl Display for FieldingFlavor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FieldingFlavor::ChargesForIt => { write!(f, "charges for it") }
+            FieldingFlavor::CollectsIt => { write!(f, "collects it") }
+            FieldingFlavor::CorralsIt => { write!(f, "corrals it") }
+            FieldingFlavor::DashesForIt => { write!(f, "dashes for it") }
+            FieldingFlavor::DivesForIt => { write!(f, "dives for it") }
+            FieldingFlavor::FieldsIt => { write!(f, "fields it") }
+            FieldingFlavor::GetsInFrontOfIt => { write!(f, "gets in front of it") }
+            FieldingFlavor::GetsIt => { write!(f, "gets it") }
+            FieldingFlavor::GoesForIt => { write!(f, "goes for it") }
+            FieldingFlavor::HasABeadOnIt => { write!(f, "has a bead on it") }
+            FieldingFlavor::IsThereToCollectIt => { write!(f, "is there to collect it") }
+            FieldingFlavor::IsThereToCorralIt => { write!(f, "is there to corral it") }
+            FieldingFlavor::IsThereToFieldIt => { write!(f, "is there to field it") }
+            FieldingFlavor::IsThereToGetIt => { write!(f, "is there to get it") }
+            FieldingFlavor::IsThereToScoopIt => { write!(f, "is there to scoop it") }
+            FieldingFlavor::IsThereToSecureIt => { write!(f, "is there to secure it") }
+            FieldingFlavor::LurchesForIt => { write!(f, "lurches for it") }
+            FieldingFlavor::RacesForIt => { write!(f, "races for it") }
+            FieldingFlavor::RacesIn => { write!(f, "races in") }
+            FieldingFlavor::RacesTowardIt => { write!(f, "races toward it") }
+            FieldingFlavor::ReachesForIt => { write!(f, "reaches for it") }
+            FieldingFlavor::RunsForIt => { write!(f, "runs for it") }
+            FieldingFlavor::ScoopsIt => { write!(f, "scoops it") }
+            FieldingFlavor::SecuresIt => { write!(f, "secures it") }
+            FieldingFlavor::TracksItDown => { write!(f, "tracks it down") }
+            FieldingFlavor::TriesForIt => { write!(f, "tries for it") }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Fielding {
+    pub defender: PlayerDesc,
+    pub flavor: FieldingFlavor,
+}
+
 #[derive(Debug)]
 pub enum Event {
     PlayBall,
     BatterUp,
     Ball(BallFlavor),
     Strike(StrikeFlavor),
-    FieldingOut {
+    Flyout {
         contact: Contact,
         defender: PlayerDesc,
+        flavor: FlyoutFlavor,
+    },
+    GroundOut {
+        contact: Contact,
+        defender: PlayerDesc,
+        flavor: FieldingFlavor,
     },
     Strikeout(PlayerDesc),
     Foul(FoulFlavor),
+    HomeRun {
+        contact: Contact,
+        batter: PlayerDesc,
+    }
 }
 
 struct Count(i64, i64);
@@ -335,11 +455,14 @@ impl Event {
                 };
                 vec![text, String::new()]
             }
-            Event::FieldingOut { contact, defender } => {
-                vec![
-                    contact.to_string(),
-                    format!("Fly out to {}.", defender.name)
-                ]
+            Event::Flyout { contact, defender, flavor } => {
+                let flyout_text = match flavor {
+                    FlyoutFlavor::FlyOutTo => { format!("Fly out to {}.", defender.name) }
+                    FlyoutFlavor::IsRightThere => { format!("{} is right there to make the catch.", defender.name) }
+                    FlyoutFlavor::MakesCatch => { format!("{} makes the catch.", defender.name) }
+                    FlyoutFlavor::MakesCatchWithAdjective(adj) => { format!("{} makes a {adj} catch.", defender.name) }
+                };
+                vec![contact.to_string(), flyout_text]
             }
             Event::Strikeout(batter) => {
                 let pitcher = state.pitcher.as_ref()
@@ -360,6 +483,20 @@ impl Event {
                     FoulFlavor::FoulsItOff => { format!("{} fouls it off. {count}.", batter.name) }
                 };
                 vec![text, String::new()]
+            }
+            Event::GroundOut { contact, defender, flavor } => {
+                vec![
+                    contact.to_string(),
+                    format!("{} {flavor}...", defender.name),
+                    format!("Groundout to {}.", defender.name),
+                ]
+            }
+            Event::HomeRun { contact, batter } => {
+                vec![
+                    contact.to_string(),
+                    format!("{} hits a Home Run!", batter.name),
+                    String::new(),
+                ]
             }
         })
     }
