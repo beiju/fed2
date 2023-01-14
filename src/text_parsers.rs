@@ -341,33 +341,36 @@ pub fn parse_makes_the_catch<'a, 'b, E: ParseError<&'a str>>(
     }
 }
 
-pub enum ParsedPostContact<'a> {
-    Fielding((&'a PlayerDesc, FieldingFlavor)),
-    HomeRun
+pub enum ParsedPostContact {
+    HomeRun,
+    Fielding(PlayerDesc, FieldingFlavor),
+    FailedFielding(PlayerDesc, FailedFieldingFlavor),
 }
 
-pub fn parse_post_contact<'a, 'b, E: ParseError<&'a str>>(
+pub fn parse_post_contact<'a, 'b, E: ParseError<&'a str> + 'b>(
     batter: &'b PlayerDesc,
     defenders: &'b [PlayerDesc],
-) -> impl FnMut(&'a str) -> IResult<&str, ParsedPostContact<'b>, E> + 'b {
+) -> impl FnMut(&'a str) -> IResult<&str, ParsedPostContact, E> + 'b {
     move |input| {
         alt((
             pair(tag(batter.name.as_str()), tag(" hits a Home Run!"))
                 .map(|_| ParsedPostContact::HomeRun),
-            parse_fielding(defenders)
-                .map(|res| ParsedPostContact::Fielding(res)),
+            parse_fielding(defenders, parse_fielding_flavor)
+                .map(|(desc, flavor)| ParsedPostContact::Fielding(desc.clone(), flavor)),
+            parse_fielding(defenders, parse_failed_fielding_flavor)
+                .map(|(desc, flavor)| ParsedPostContact::FailedFielding(desc.clone(), flavor)),
         )).parse(input)
     }
 }
 
-pub fn parse_fielding<'a, 'b, E: ParseError<&'a str>>(
+pub fn parse_fielding<'a, 'b, E: ParseError<&'a str>, F>(
     defenders: &'b [PlayerDesc],
-) -> impl FnMut(&'a str) -> IResult<&str, (&'b PlayerDesc, FieldingFlavor), E> + 'b {
+    mut flavor_parser: impl FnMut(&'a str) -> IResult<&'a str, F, E> + 'b,
+) -> impl FnMut(&'a str) -> IResult<&str, (&'b PlayerDesc, F), E> + 'b {
     move |input| {
         let (input, defender) = parse_name_from_list(defenders).parse(input)?;
         let (input, _) = tag(" ").parse(input)?;
-        let (input, flavor) = parse_fielding_flavor.parse(input)?;
-        let (input, _) = tag("...").parse(input)?;
+        let (input, flavor) = flavor_parser.parse(input)?;
         Ok((input, (defender, flavor)))
     }
 }
@@ -391,37 +394,54 @@ fn parse_catch_adjective<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<
 fn parse_fielding_flavor<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, FieldingFlavor, E> {
     // There's so many of these I need a nested alt
     let alt1 = alt((
-        tag("charges for it").map(|_| FieldingFlavor::ChargesForIt),
-        tag("collects it").map(|_| FieldingFlavor::CollectsIt),
-        tag("corrals it").map(|_| FieldingFlavor::CorralsIt),
-        tag("dashes for it").map(|_| FieldingFlavor::DashesForIt),
-        tag("dives for it").map(|_| FieldingFlavor::DivesForIt),
-        tag("fields it").map(|_| FieldingFlavor::FieldsIt),
-        tag("gets in front of it").map(|_| FieldingFlavor::GetsInFrontOfIt),
-        tag("gets it").map(|_| FieldingFlavor::GetsIt),
-        tag("goes for it").map(|_| FieldingFlavor::GoesForIt),
-        tag("has a bead on it").map(|_| FieldingFlavor::HasABeadOnIt),
-        tag("is there to collect it").map(|_| FieldingFlavor::IsThereToCollectIt),
-        tag("is there to corral it").map(|_| FieldingFlavor::IsThereToCorralIt),
-        tag("is there to field it").map(|_| FieldingFlavor::IsThereToFieldIt),
-        tag("is there to get it").map(|_| FieldingFlavor::IsThereToGetIt),
+        tag("charges for it...").map(|_| FieldingFlavor::ChargesForIt),
+        tag("collects it...").map(|_| FieldingFlavor::CollectsIt),
+        tag("corrals it...").map(|_| FieldingFlavor::CorralsIt),
+        tag("dashes for it...").map(|_| FieldingFlavor::DashesForIt),
+        tag("dives for it...").map(|_| FieldingFlavor::DivesForIt),
+        tag("fields it...").map(|_| FieldingFlavor::FieldsIt),
+        tag("gets in front of it...").map(|_| FieldingFlavor::GetsInFrontOfIt),
+        tag("gets it...").map(|_| FieldingFlavor::GetsIt),
+        tag("goes for it...").map(|_| FieldingFlavor::GoesForIt),
+        tag("has a bead on it...").map(|_| FieldingFlavor::HasABeadOnIt),
+        tag("is there to collect it...").map(|_| FieldingFlavor::IsThereToCollectIt),
+        tag("is there to corral it...").map(|_| FieldingFlavor::IsThereToCorralIt),
+        tag("is there to field it...").map(|_| FieldingFlavor::IsThereToFieldIt),
+        tag("is there to get it...").map(|_| FieldingFlavor::IsThereToGetIt),
     ));
     let alt2 = alt((
-        tag("is there to scoop it").map(|_| FieldingFlavor::IsThereToScoopIt),
-        tag("is there to secure it").map(|_| FieldingFlavor::IsThereToSecureIt),
-        tag("lurches for it").map(|_| FieldingFlavor::LurchesForIt),
-        tag("races for it").map(|_| FieldingFlavor::RacesForIt),
-        tag("races in").map(|_| FieldingFlavor::RacesIn),
-        tag("races toward it").map(|_| FieldingFlavor::RacesTowardIt),
-        tag("reaches for it").map(|_| FieldingFlavor::ReachesForIt),
-        tag("runs for it").map(|_| FieldingFlavor::RunsForIt),
-        tag("scoops it").map(|_| FieldingFlavor::ScoopsIt),
-        tag("secures it").map(|_| FieldingFlavor::SecuresIt),
-        tag("tracks it down").map(|_| FieldingFlavor::TracksItDown),
-        tag("tries for it").map(|_| FieldingFlavor::TriesForIt),
+        tag("is there to scoop it...").map(|_| FieldingFlavor::IsThereToScoopIt),
+        tag("is there to secure it...").map(|_| FieldingFlavor::IsThereToSecureIt),
+        tag("lurches for it...").map(|_| FieldingFlavor::LurchesForIt),
+        tag("races for it...").map(|_| FieldingFlavor::RacesForIt),
+        tag("races in...").map(|_| FieldingFlavor::RacesIn),
+        tag("races toward it...").map(|_| FieldingFlavor::RacesTowardIt),
+        tag("reaches for it...").map(|_| FieldingFlavor::ReachesForIt),
+        tag("runs for it...").map(|_| FieldingFlavor::RunsForIt),
+        tag("scoops it...").map(|_| FieldingFlavor::ScoopsIt),
+        tag("secures it...").map(|_| FieldingFlavor::SecuresIt),
+        tag("tracks it down...").map(|_| FieldingFlavor::TracksItDown),
+        tag("tries for it...").map(|_| FieldingFlavor::TriesForIt),
     ));
 
     alt((alt1, alt2)).parse(input)
+}
+
+fn parse_failed_fielding_flavor<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, FailedFieldingFlavor, E> {
+    alt((
+        tag("bobbles it!").map(|_| FailedFieldingFlavor::BobblesIt),
+        tag("can't collect it...").map(|_| FailedFieldingFlavor::CantCollectIt),
+        tag("can't corral it...").map(|_| FailedFieldingFlavor::CantCorralIt),
+        tag("can't field it...").map(|_| FailedFieldingFlavor::CantFieldIt),
+        tag("can't get it...").map(|_| FailedFieldingFlavor::CantGetIt),
+        tag("can't make the catch!").map(|_| FailedFieldingFlavor::CantMakeTheCatch),
+        tag("can't scoop it...").map(|_| FailedFieldingFlavor::CantScoopIt),
+        tag("can't secure it...").map(|_| FailedFieldingFlavor::CantSecureIt),
+        tag("drops it!").map(|_| FailedFieldingFlavor::DropsIt),
+        tag("is late getting there...").map(|_| FailedFieldingFlavor::IsLateGettingThere),
+        tag("just misses the catch!").map(|_| FailedFieldingFlavor::JustMissesTheCatch),
+        tag("loses it!").map(|_| FailedFieldingFlavor::LosesIt),
+    )).parse(input)
 }
 
 pub fn parse_makes_catch_with_adjective<'a, 'b, E: ParseError<&'a str>>(
@@ -458,6 +478,40 @@ pub fn parse_groundout<'a, 'b, E: ParseError<&'a str>>(
     }
 }
 
+fn parse_hit_type<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, HitType, E> {
+    alt((
+        tag("Single").map(|_| HitType::Single),
+        tag("Double").map(|_| HitType::Double),
+        tag("Triple").map(|_| HitType::Triple),
+    )).parse(input)
+}
+
+pub fn parse_base_hit<'a, 'b, E: ParseError<&'a str>>(
+    batter_name: &'b str,
+) -> impl FnMut(&'a str) -> IResult<&str, (HitType, HitFlavor), E> + 'b {
+    move |input| {
+        alt((
+            parse_base_hit_flavor(batter_name, " is on with a ")
+                .map(|hit_type| (hit_type, HitFlavor::IsOnWith)),
+            parse_base_hit_flavor(batter_name, " hits a ")
+                .map(|hit_type| (hit_type, HitFlavor::Hits)),
+        )).parse(input)
+    }
+}
+
+pub fn parse_base_hit_flavor<'a, 'b, E: ParseError<&'a str>>(
+    batter_name: &'b str,
+    flavor: &'static str,
+) -> impl FnMut(&'a str) -> IResult<&str, HitType, E> + 'b {
+    move |input| {
+        let (input, _) = tag(batter_name).parse(input)?;
+        let (input, _) = tag(flavor).parse(input)?;
+        let (input, hit_type) = parse_hit_type.parse(input)?;
+        let (input, _) = tag("!").parse(input)?;
+
+        Ok((input, hit_type))
+    }
+}
 
 pub(crate) fn parse_terminated<'s, E: ParseError<&'s str>>(tag_content: &str) -> impl Fn(&'s str) -> IResult<&'s str, &'s str, E> + '_ {
     move |input| {

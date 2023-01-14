@@ -5,7 +5,7 @@ use nom_supreme::final_parser::{final_parser, Location};
 use nom::Parser as NomParser;
 use nom::sequence::pair;
 use crate::chron_schema::{GameUpdate, GameUpdateDelta, PlayerDesc, State, TeamAtBat};
-use crate::fed_schema::{Contact, Event, Fielding};
+use crate::fed_schema::{Contact, Event, FailedFielding, Fielding};
 use crate::text_parsers::*;
 
 #[derive(Debug, Default)]
@@ -19,6 +19,7 @@ enum ParserExpectedEvent {
     PostAppearanceEmpty(Event),
     Contact(Contact),
     Fielding(Contact, Fielding),
+    FailedFielding(Contact, FailedFielding),
 }
 
 #[derive(Debug, Default)]
@@ -136,28 +137,31 @@ impl Parser {
                         flavor,
                     })
                 } else {
-                    let batter = prev_state.batter.as_ref()
-                        .ok_or_else(|| anyhow!("Expected non-null batter after Contact"))?;
                     let defenders = prev_state.defenders.as_ref()
                         .ok_or_else(|| anyhow!("Expected non-null defenders after Contact"))?;
 
-                    let parsed = run_parser(parse_post_contact(&batter, &defenders))(&delta.display_text)?;
+                    let parsed = run_parser(parse_post_contact(&contact.batter, &defenders))(&delta.display_text)?;
                     match parsed {
                         ParsedPostContact::HomeRun => {
                             // TODO If there are runners, expect scores
                             self.next_event_genre = ParserExpectedEvent::PostAppearanceEmpty(Event::HomeRun {
                                 contact,
-                                batter: batter.clone()
                             });
                             None
                         }
-                        ParsedPostContact::Fielding((defender, flavor)) => {
+                        ParsedPostContact::Fielding(defender, flavor) => {
                             self.next_event_genre = ParserExpectedEvent::Fielding(contact, Fielding {
-                                defender: defender.clone(),
+                                defender,
                                 flavor,
                             });
                             None
-
+                        }
+                        ParsedPostContact::FailedFielding(defender, flavor) => {
+                            self.next_event_genre = ParserExpectedEvent::FailedFielding(contact, FailedFielding {
+                                defender,
+                                flavor,
+                            });
+                            None
                         }
                     }
                 }
@@ -175,6 +179,16 @@ impl Parser {
                 } else {
                     todo!()
                 }
+            }
+            ParserExpectedEvent::FailedFielding(contact, fielding) => {
+                let (hit_type, flavor) = run_parser(parse_base_hit(&contact.batter.name))(&delta.display_text)?;
+                self.next_event_genre = ParserExpectedEvent::BatterUp;
+                Some(Event::Hit {
+                    contact,
+                    fielding,
+                    hit_type,
+                    flavor,
+                })
             }
         };
 

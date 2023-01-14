@@ -351,32 +351,32 @@ pub enum FieldingFlavor {
 impl Display for FieldingFlavor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            FieldingFlavor::ChargesForIt => { write!(f, "charges for it") }
-            FieldingFlavor::CollectsIt => { write!(f, "collects it") }
-            FieldingFlavor::CorralsIt => { write!(f, "corrals it") }
-            FieldingFlavor::DashesForIt => { write!(f, "dashes for it") }
-            FieldingFlavor::DivesForIt => { write!(f, "dives for it") }
-            FieldingFlavor::FieldsIt => { write!(f, "fields it") }
-            FieldingFlavor::GetsInFrontOfIt => { write!(f, "gets in front of it") }
-            FieldingFlavor::GetsIt => { write!(f, "gets it") }
-            FieldingFlavor::GoesForIt => { write!(f, "goes for it") }
-            FieldingFlavor::HasABeadOnIt => { write!(f, "has a bead on it") }
-            FieldingFlavor::IsThereToCollectIt => { write!(f, "is there to collect it") }
-            FieldingFlavor::IsThereToCorralIt => { write!(f, "is there to corral it") }
-            FieldingFlavor::IsThereToFieldIt => { write!(f, "is there to field it") }
-            FieldingFlavor::IsThereToGetIt => { write!(f, "is there to get it") }
-            FieldingFlavor::IsThereToScoopIt => { write!(f, "is there to scoop it") }
-            FieldingFlavor::IsThereToSecureIt => { write!(f, "is there to secure it") }
-            FieldingFlavor::LurchesForIt => { write!(f, "lurches for it") }
-            FieldingFlavor::RacesForIt => { write!(f, "races for it") }
-            FieldingFlavor::RacesIn => { write!(f, "races in") }
-            FieldingFlavor::RacesTowardIt => { write!(f, "races toward it") }
-            FieldingFlavor::ReachesForIt => { write!(f, "reaches for it") }
-            FieldingFlavor::RunsForIt => { write!(f, "runs for it") }
-            FieldingFlavor::ScoopsIt => { write!(f, "scoops it") }
-            FieldingFlavor::SecuresIt => { write!(f, "secures it") }
-            FieldingFlavor::TracksItDown => { write!(f, "tracks it down") }
-            FieldingFlavor::TriesForIt => { write!(f, "tries for it") }
+            FieldingFlavor::ChargesForIt => { write!(f, "charges for it...") }
+            FieldingFlavor::CollectsIt => { write!(f, "collects it...") }
+            FieldingFlavor::CorralsIt => { write!(f, "corrals it...") }
+            FieldingFlavor::DashesForIt => { write!(f, "dashes for it...") }
+            FieldingFlavor::DivesForIt => { write!(f, "dives for it...") }
+            FieldingFlavor::FieldsIt => { write!(f, "fields it...") }
+            FieldingFlavor::GetsInFrontOfIt => { write!(f, "gets in front of it...") }
+            FieldingFlavor::GetsIt => { write!(f, "gets it...") }
+            FieldingFlavor::GoesForIt => { write!(f, "goes for it...") }
+            FieldingFlavor::HasABeadOnIt => { write!(f, "has a bead on it...") }
+            FieldingFlavor::IsThereToCollectIt => { write!(f, "is there to collect it...") }
+            FieldingFlavor::IsThereToCorralIt => { write!(f, "is there to corral it...") }
+            FieldingFlavor::IsThereToFieldIt => { write!(f, "is there to field it...") }
+            FieldingFlavor::IsThereToGetIt => { write!(f, "is there to get it...") }
+            FieldingFlavor::IsThereToScoopIt => { write!(f, "is there to scoop it...") }
+            FieldingFlavor::IsThereToSecureIt => { write!(f, "is there to secure it...") }
+            FieldingFlavor::LurchesForIt => { write!(f, "lurches for it...") }
+            FieldingFlavor::RacesForIt => { write!(f, "races for it...") }
+            FieldingFlavor::RacesIn => { write!(f, "races in...") }
+            FieldingFlavor::RacesTowardIt => { write!(f, "races toward it...") }
+            FieldingFlavor::ReachesForIt => { write!(f, "reaches for it...") }
+            FieldingFlavor::RunsForIt => { write!(f, "runs for it...") }
+            FieldingFlavor::ScoopsIt => { write!(f, "scoops it...") }
+            FieldingFlavor::SecuresIt => { write!(f, "secures it...") }
+            FieldingFlavor::TracksItDown => { write!(f, "tracks it down...") }
+            FieldingFlavor::TriesForIt => { write!(f, "tries for it...") }
         }
     }
 }
@@ -387,10 +387,95 @@ pub struct Fielding {
     pub flavor: FieldingFlavor,
 }
 
+impl Display for Fielding {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.defender.name, self.flavor)
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum FailedFieldingFlavor {
+    BobblesIt,
+    CantCollectIt,
+    CantCorralIt,
+    CantFieldIt,
+    CantGetIt,
+    CantMakeTheCatch,
+    CantScoopIt,
+    CantSecureIt,
+    DropsIt,
+    IsLateGettingThere,
+    JustMissesTheCatch,
+    LosesIt,
+}
+
+impl Display for FailedFieldingFlavor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FailedFieldingFlavor::BobblesIt => { write!(f, "bobbles it!") }
+            FailedFieldingFlavor::CantCollectIt => { write!(f, "can't collect it...") }
+            FailedFieldingFlavor::CantCorralIt => { write!(f, "can't corral it...") }
+            FailedFieldingFlavor::CantFieldIt => { write!(f, "can't field it...") }
+            FailedFieldingFlavor::CantGetIt => { write!(f, "can't get it...") }
+            FailedFieldingFlavor::CantMakeTheCatch => { write!(f, "can't make the catch!") }
+            FailedFieldingFlavor::CantScoopIt => { write!(f, "can't scoop it...") }
+            FailedFieldingFlavor::CantSecureIt => { write!(f, "can't secure it...") }
+            FailedFieldingFlavor::DropsIt => { write!(f, "drops it!") }
+            FailedFieldingFlavor::IsLateGettingThere => { write!(f, "is late getting there...") }
+            FailedFieldingFlavor::JustMissesTheCatch => { write!(f, "just misses the catch!") }
+            FailedFieldingFlavor::LosesIt => { write!(f, "loses it!") }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FailedFielding {
+    pub defender: PlayerDesc,
+    pub flavor: FailedFieldingFlavor,
+}
+
+impl Display for FailedFielding {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.defender.name, self.flavor)
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum StrikeoutFlavor {
     NamedBoth,
     NamedBatter,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum HitType {
+    Single,
+    Double,
+    Triple,
+}
+
+impl Display for HitType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HitType::Single => { write!(f, "Single") }
+            HitType::Double => { write!(f, "Double") }
+            HitType::Triple => { write!(f, "Triple") }
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum HitFlavor {
+    Hits,
+    IsOnWith
+}
+
+impl Display for HitFlavor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HitFlavor::Hits => { write!(f, "hits a")}
+            HitFlavor::IsOnWith => { write!(f, "is on with a") }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -416,7 +501,12 @@ pub enum Event {
     Foul(FoulFlavor),
     HomeRun {
         contact: Contact,
-        batter: PlayerDesc,
+    },
+    Hit {
+        contact: Contact,
+        fielding: FailedFielding, // TODO Not always failed
+        hit_type: HitType,
+        flavor: HitFlavor,
     }
 }
 
@@ -514,15 +604,22 @@ impl Event {
             Event::GroundOut { contact, defender, flavor } => {
                 vec![
                     contact.to_string(),
-                    format!("{} {flavor}...", defender.name),
+                    format!("{} {flavor}", defender.name),
                     format!("Groundout to {}.", defender.name),
                 ]
             }
-            Event::HomeRun { contact, batter } => {
+            Event::HomeRun { contact } => {
                 vec![
                     contact.to_string(),
-                    format!("{} hits a Home Run!", batter.name),
+                    format!("{} hits a Home Run!", contact.batter.name),
                     String::new(),
+                ]
+            }
+            Event::Hit { contact, fielding, hit_type, flavor } => {
+                vec![
+                    contact.to_string(),
+                    fielding.to_string(),
+                    format!("{} {} {}!", contact.batter.name, flavor, hit_type),
                 ]
             }
         })
