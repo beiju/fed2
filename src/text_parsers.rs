@@ -97,15 +97,42 @@ pub fn parse_strike<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pi
                 .map(|_| StrikeFlavor::None),
             count_dot(balls, strikes, tag("Strike, looking."))
                 .map(|_| StrikeFlavor::Looking),
+            count_dot(balls, strikes, tag("Strike, swinging."))
+                .map(|_| StrikeFlavor::Swinging),
             count_dot(balls, strikes, preceded(tag(pitcher_name), tag(" throws a strike.")))
                 .map(|_| StrikeFlavor::ThrowsAStrike),
             count_dot(balls, strikes, preceded(tag(batter_name), tag(" is caught looking. Strike,")))
                 .map(|_| StrikeFlavor::CaughtLooking),
             count_dot(balls, strikes, preceded(tag(batter_name), tag(" chases. Strike,")))
                 .map(|_| StrikeFlavor::Chases),
+            count_dot(balls, strikes, preceded(tag(batter_name), tag(" guesses wrong. Strike,")))
+                .map(|_| StrikeFlavor::GuessesWrong),
+            count_dot(balls, strikes, parse_swing_with_adjective(batter_name))
+                .map(|adj| StrikeFlavor::AdjectiveSwing(adj)),
         )).parse(input)
     }
 }
+
+fn parse_swing_adjective<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, SwingAdjective, E> {
+    alt((
+        tag("pathetic").map(|_| SwingAdjective::Pathetic),
+        tag("poor").map(|_| SwingAdjective::Poor),
+        tag("sad").map(|_| SwingAdjective::Sad),
+        tag("weak").map(|_| SwingAdjective::Weak),
+    )).parse(input)
+}
+
+pub fn parse_swing_with_adjective<'a, 'b, E: ParseError<&'a str>>(batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, SwingAdjective, E> + 'b {
+    move |input| {
+        let (input, _) = tag(batter_name).parse(input)?;
+        let (input, _) = tag(" takes a ").parse(input)?;
+        let (input, adjective) = parse_swing_adjective.parse(input)?;
+        let (input, _) = tag(" swing. Strike,").parse(input)?;
+
+        Ok((input, adjective))
+    }
+}
+
 
 pub fn parse_foul<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, FoulFlavor, E> + 'b {
     move |input| {

@@ -61,12 +61,34 @@ pub enum BallFlavor {
 }
 
 #[derive(Debug, Copy, Clone)]
+pub enum SwingAdjective {
+    Pathetic,
+    Poor,
+    Sad,
+    Weak
+}
+
+impl Display for SwingAdjective {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SwingAdjective::Pathetic => { write!(f, "pathetic") }
+            SwingAdjective::Poor => { write!(f, "poor") }
+            SwingAdjective::Sad => { write!(f, "sad") }
+            SwingAdjective::Weak => { write!(f, "weak") }
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum StrikeFlavor {
     None,
     Looking,
+    Swinging,
     ThrowsAStrike,
     CaughtLooking,
     Chases,
+    GuessesWrong,
+    AdjectiveSwing(SwingAdjective)
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -564,9 +586,12 @@ impl Event {
                 let text = match flavor {
                     StrikeFlavor::None => { format!("Strike, {count}.") }
                     StrikeFlavor::Looking => { format!("Strike, looking. {count}.") }
+                    StrikeFlavor::Swinging => { format!("Strike, swinging. {count}.") }
                     StrikeFlavor::ThrowsAStrike => { format!("{} throws a strike. {count}.", pitcher.name) }
                     StrikeFlavor::CaughtLooking => { format!("{} is caught looking. Strike, {count}.", batter.name) }
                     StrikeFlavor::Chases => { format!("{} chases. Strike, {count}.", batter.name) }
+                    StrikeFlavor::GuessesWrong => { format!("{} guesses wrong. Strike, {count}.", batter.name) }
+                    StrikeFlavor::AdjectiveSwing(adj) => { format!("{} takes a {adj} swing. Strike, {count}.", batter.name) }
                 };
                 vec![text, String::new()]
             }
