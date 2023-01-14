@@ -42,20 +42,36 @@ fn count_dot<'a, O, E, F>(balls: i64, strikes: i64, mut child: F) -> impl FnMut(
 pub fn parse_ball<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitcher_name: &'b str, batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, BallFlavor, E> + 'b {
     move |input| {
         alt((
-            count_dot(balls, strikes, tag("Ball."))
-                .map(|_| BallFlavor::BallPeriod),
-            count_dot(balls, strikes, tag("Bal,."))
+            count_dot(balls, strikes, pair(tag(pitcher_name), tag(" doesn't blink. Ball,")))
+                .map(|_| BallFlavor::DoesntBlink),
+            count_dot(balls, strikes, pair(tag(pitcher_name), tag(" just misses the zone. Ball,")))
+                .map(|_| BallFlavor::JustMisses),
+            count_dot(balls, strikes, pair(tag(batter_name), tag(" lays off outside. Ball,")))
+                .map(|_| BallFlavor::LaysOffOutside),
+            count_dot(balls, strikes, pair(tag(batter_name), tag(" looks at a ball outside. Ball,")))
+                .map(|_| BallFlavor::LooksAtBallOutside),
+            count_dot(balls, strikes, pair(tag(pitcher_name), tag(" misses big time. Ball,")))
+                .map(|_| BallFlavor::MissesBigTime),
+            count_dot(balls, strikes, pair(tag(pitcher_name), tag(" stumbles. Ball,")))
+                .map(|_| BallFlavor::Stumbles),
+            count_dot(balls, strikes, pair(tag(pitcher_name), tag(" throws it outside. Ball,")))
+                .map(|_| BallFlavor::ThrowsOutside),
+            count_dot(balls, strikes, terminated(parse_pitch_adjective, tag(" pitch. Ball,")))
+                .map(|adj| BallFlavor::Adjective(adj)),
+            count_dot(balls, strikes, tag("Ball,"))
                 .map(|_| BallFlavor::BallComma),
-            count(balls, strikes, tag("Ball, way outside."))
-                .map(|_| BallFlavor::WayOutside),
+            count_dot(balls, strikes, tag("Ball, extremely outside."))
+                .map(|_| BallFlavor::ExtremelyOutside),
             count_dot(balls, strikes, tag("Ball, just outside."))
                 .map(|_| BallFlavor::JustOutside),
-            count_dot(balls, strikes, pair(tag(pitcher_name), tag(" just misses the zone. Ball,")))
+            count(balls, strikes, tag("Ball, way outside."))
+                .map(|_| BallFlavor::WayOutside),
+            count_dot(balls, strikes, tag("Ball."))
+                .map(|_| BallFlavor::BallPeriod),
+            count_dot(balls, strikes, pair(tag(pitcher_name), tag(" misses the zone. Ball,")))
                 .map(|_| BallFlavor::MissesTheZone),
             count_dot(balls, strikes, pair(tag(batter_name), tag(" does not chase. Ball,")))
                 .map(|_| BallFlavor::DoesNotChase),
-            count_dot(balls, strikes, terminated(parse_pitch_adjective, tag(" pitch. Ball,")))
-                .map(|adj| BallFlavor::Adjective(adj)),
         )).parse(input)
     }
 }

@@ -42,13 +42,21 @@ impl Display for PitchAdjective {
 
 #[derive(Debug, Copy, Clone)]
 pub enum BallFlavor {
+    DoesntBlink,
+    JustMisses,
+    LaysOffOutside,
+    LooksAtBallOutside,
+    MissesBigTime,
+    Stumbles,
+    ThrowsOutside,
+    Adjective(PitchAdjective),
+    BallComma,
+    ExtremelyOutside,
+    JustOutside,
+    WayOutside,
     // whyyyyyy
     BallPeriod,
-    BallComma,
-    WayOutside,
-    JustOutside,
     MissesTheZone,
-    Adjective(PitchAdjective),
     DoesNotChase,
 }
 
@@ -433,9 +441,17 @@ impl Event {
                     BallFlavor::BallComma => { format!("Ball, {count}")  }
                     BallFlavor::WayOutside => { format!("Ball, way outside. {count}") }
                     BallFlavor::JustOutside => { format!("Ball, just outside. {count}.") }
-                    BallFlavor::MissesTheZone => { format!("{} just misses the zone. Ball, {count}.", pitcher.name) }
+                    BallFlavor::ExtremelyOutside => { format!("Ball, extremely outside. {count}.") }
+                    BallFlavor::MissesTheZone => { format!("{} misses the zone. {count}.", pitcher.name) }
                     BallFlavor::DoesNotChase => { format!("{} does not chase. Ball, {count}.", batter.name) }
                     BallFlavor::Adjective(adj) => { format!("{adj} pitch. Ball, {count}.") }
+                    BallFlavor::DoesntBlink => { format!("{} doesn't blink. {count}.", batter.name) }
+                    BallFlavor::JustMisses => { format!("{} just misses the zone. Ball, {count}.", pitcher.name) }
+                    BallFlavor::LaysOffOutside => { format!("{} lays off outside. {count}.", pitcher.name) }
+                    BallFlavor::LooksAtBallOutside => { format!("{} looks at a ball outside. {count}.", batter.name) }
+                    BallFlavor::MissesBigTime => { format!("{} misses big time. {count}.", pitcher.name) }
+                    BallFlavor::Stumbles => { format!("{} stumbles. {count}.", pitcher.name) }
+                    BallFlavor::ThrowsOutside => { format!("{} throws it outside. Ball, {count}.", pitcher.name) }
                 };
                 vec![text, String::new()]
             }
