@@ -122,12 +122,37 @@ pub fn parse_foul<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, batt
     }
 }
 
-pub fn parse_strikeout<'a, 'b, E: ParseError<&'a str>>(pitcher_name: &'b str, batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, (), E> + 'b {
+pub fn parse_strikeout<'a, 'b, E: ParseError<&'a str>>(
+    pitcher_name: &'b str,
+    batter_name: &'b str,
+) -> impl FnMut(&'a str) -> IResult<&'a str, StrikeoutFlavor, E> + 'b {
+    move |input| {
+        alt((
+            parse_strikeout_both_named(pitcher_name, batter_name).map(|_| StrikeoutFlavor::NamedBoth),
+            parse_strikeout_batter_named(batter_name).map(|_| StrikeoutFlavor::NamedBatter),
+        )).parse(input)
+    }
+}
+
+pub fn parse_strikeout_both_named<'a, 'b, E: ParseError<&'a str>>(
+    pitcher_name: &'b str,
+    batter_name: &'b str,
+) -> impl FnMut(&'a str) -> IResult<&'a str, (), E> + 'b {
     move |input| {
         let (input, _) = tag(pitcher_name).parse(input)?;
         let (input, _) = tag(" strikes ").parse(input)?;
         let (input, _) = tag(batter_name).parse(input)?;
         let (input, _) = tag(" out.").parse(input)?;
+        Ok((input, ()))
+    }
+}
+
+pub fn parse_strikeout_batter_named<'a, 'b, E: ParseError<&'a str>>(
+    batter_name: &'b str,
+) -> impl FnMut(&'a str) -> IResult<&'a str, (), E> + 'b {
+    move |input| {
+        let (input, _) = tag(batter_name).parse(input)?;
+        let (input, _) = tag(" strikes out.").parse(input)?;
         Ok((input, ()))
     }
 }

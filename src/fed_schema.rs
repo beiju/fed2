@@ -387,6 +387,12 @@ pub struct Fielding {
     pub flavor: FieldingFlavor,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum StrikeoutFlavor {
+    NamedBoth,
+    NamedBatter,
+}
+
 #[derive(Debug)]
 pub enum Event {
     PlayBall,
@@ -403,7 +409,10 @@ pub enum Event {
         defender: PlayerDesc,
         flavor: FieldingFlavor,
     },
-    Strikeout(PlayerDesc),
+    Strikeout {
+        batter: PlayerDesc,
+        flavor: StrikeoutFlavor,
+    },
     Foul(FoulFlavor),
     HomeRun {
         contact: Contact,
@@ -437,8 +446,8 @@ impl Event {
                 let batter = state.batter.as_ref()
                     .ok_or_else(|| anyhow!("Expected non-null batter in a Ball event"))?;
                 let text = match flavor {
-                    BallFlavor::BallPeriod => { format!("Ball. {count}")  }
-                    BallFlavor::BallComma => { format!("Ball, {count}")  }
+                    BallFlavor::BallPeriod => { format!("Ball. {count}.")  }
+                    BallFlavor::BallComma => { format!("Ball, {count}.")  }
                     BallFlavor::WayOutside => { format!("Ball, way outside. {count}") }
                     BallFlavor::JustOutside => { format!("Ball, just outside. {count}.") }
                     BallFlavor::ExtremelyOutside => { format!("Ball, extremely outside. {count}.") }
@@ -480,12 +489,14 @@ impl Event {
                 };
                 vec![contact.to_string(), flyout_text]
             }
-            Event::Strikeout(batter) => {
+            Event::Strikeout { batter, flavor}  => {
                 let pitcher = state.pitcher.as_ref()
                     .ok_or_else(|| anyhow!("Expected non-null pitcher in a Strikeout event"))?;
-                vec![
-                    format!("{} strikes {} out.", pitcher.name, batter.name)
-                ]
+                let text = match flavor {
+                    StrikeoutFlavor::NamedBoth => { format!("{} strikes {} out.", pitcher.name, batter.name) }
+                    StrikeoutFlavor::NamedBatter => { format!("{} strikes out.", batter.name) }
+                };
+                vec![text]
             }
             Event::Foul(flavor) => {
                 let count = Count(state.balls, state.strikes);

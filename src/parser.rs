@@ -90,9 +90,12 @@ impl Parser {
                     let batter = prev_state.batter.as_ref()
                         .ok_or_else(|| anyhow!("Expected non-null batter before a Strike event"))?;
 
-                    run_parser(parse_strikeout(&pitcher.name, &batter.name))(&delta.display_text)?;
+                    let flavor = run_parser(parse_strikeout(&pitcher.name, &batter.name))(&delta.display_text)?;
                     self.next_event_genre = ParserExpectedEvent::BatterUp;
-                    Some(Event::Strikeout(batter.clone()))
+                    Some(Event::Strikeout {
+                        batter: batter.clone(),
+                        flavor,
+                    })
                 } else {
                     // Batter gets cleared from current state
                     let batter = prev_state.batter.as_ref()
