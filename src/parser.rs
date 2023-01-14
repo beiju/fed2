@@ -100,16 +100,25 @@ impl Parser {
                 } else {
                     // Batter gets cleared from current state
                     let batter = prev_state.batter.as_ref()
-                        .ok_or_else(|| anyhow!("Expected non-null batter before a Contact sub-event"))?;
+                        .ok_or_else(|| anyhow!("Expected non-null batter before a Foul/Contact sub-event"))?;
 
-                    let (flavor, location) =
-                        run_parser(parse_contact(&batter.name))(&delta.display_text)?;
-                    self.next_event_genre = ParserExpectedEvent::Contact(Contact {
-                        batter: batter.clone(),
-                        flavor,
-                        location,
-                    });
-                    None
+                    let parsed = run_parser(parse_foul_or_contact(
+                        self.state.balls, self.state.strikes, &batter.name,
+                    ))(&delta.display_text)?;
+                    match parsed {
+                        ParsedFoulOrContact::Foul(flavor) => {
+                            self.next_event_genre = ParserExpectedEvent::PostPitchEmpty(Event::Foul(flavor));
+                            None
+                        }
+                        ParsedFoulOrContact::Contact((flavor, location)) => {
+                            self.next_event_genre = ParserExpectedEvent::Contact(Contact {
+                                batter: batter.clone(),
+                                flavor,
+                                location,
+                            });
+                            None
+                        }
+                    }
                 }
             }
             ParserExpectedEvent::PostPitchEmpty(event) => {

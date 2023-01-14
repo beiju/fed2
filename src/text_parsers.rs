@@ -184,6 +184,25 @@ pub fn parse_strikeout_batter_named<'a, 'b, E: ParseError<&'a str>>(
     }
 }
 
+pub enum ParsedFoulOrContact {
+    Foul(FoulFlavor),
+    Contact((ContactFlavor, Option<FieldLocation>))
+}
+
+pub fn parse_foul_or_contact<'a, 'b, E: ParseError<&'a str>>(
+    balls: i64,
+    strikes: i64,
+    batter_name: &'b str
+) -> impl FnMut(&'a str) -> IResult<&'a str, ParsedFoulOrContact, E> + 'b {
+    move |input| {
+        alt((
+            parse_foul(balls, strikes, batter_name).map(|r| ParsedFoulOrContact::Foul(r)),
+            parse_contact(batter_name).map(|r| ParsedFoulOrContact::Contact(r)),
+        )).parse(input)
+    }
+}
+
+
 pub fn parse_contact<'a, 'b, E: ParseError<&'a str>>(
     batter_name: &'b str
 ) -> impl FnMut(&'a str) -> IResult<&'a str, (ContactFlavor, Option<FieldLocation>), E> + 'b {
