@@ -7,7 +7,7 @@ use nom::error::ParseError;
 use nom::sequence::{pair, preceded, terminated};
 use nom_supreme::error::{BaseErrorKind, ErrorTree};
 use nom_supreme::final_parser::{final_parser, Location};
-use crate::chron_schema::PlayerDesc;
+use crate::chron_schema::{PlayerDesc, RunnerDesc};
 use crate::fed_schema::*;
 
 pub(crate) type ParserError<'a> = nom::error::VerboseError<&'a str>;
@@ -515,6 +515,19 @@ pub fn parse_player_name<'a, 'b, E: ParseError<&'a str>>(
         Ok((input, ()))
     }
 }
+
+pub fn parse_runner_name<'a, 'b, E: ParseError<&'a str>>(
+    player: &'b RunnerDesc
+) -> impl FnMut(&'a str) -> IResult<&str, (), E> + 'b {
+    move |input| {
+        // You could do this without allocating by splitting the name by quote marks and then
+        // matching the segments one by one, but I'm being lazy
+        let (input, _) = tag(player.name.replace('\'', "&#x27;").as_str()).parse(input)?;
+
+        Ok((input, ()))
+    }
+}
+
 pub fn parse_name_from_list<'a, 'b, E: ParseError<&'a str>>(
     players: &'b [PlayerDesc]
 ) -> impl FnMut(&'a str) -> IResult<&str, &'b PlayerDesc, E> + 'b {
@@ -527,13 +540,52 @@ pub fn parse_name_from_list<'a, 'b, E: ParseError<&'a str>>(
     }
 }
 
+pub enum FieldingResult {
+    Groundout(GroundoutFlavor),
+    Hit((HitType, HitFlavor))
+}
+
+pub fn parse_fielding_result<'a, 'b, E: ParseError<&'a str>>(
+    batter: &'b PlayerDesc,
+    defender: &'b PlayerDesc,
+) -> impl FnMut(&'a str) -> IResult<&str, FieldingResult, E> + 'b {
+    move |input| {
+        alt((
+            parse_groundout(batter, defender).map(|r| FieldingResult::Groundout(r)),
+            parse_base_hit(batter).map(|r| FieldingResult::Hit(r))
+        )).parse(input)
+    }
+}
+
 pub fn parse_groundout<'a, 'b, E: ParseError<&'a str>>(
+    batter: &'b PlayerDesc,
+    defender: &'b PlayerDesc,
+) -> impl FnMut(&'a str) -> IResult<&str, GroundoutFlavor, E> + 'b {
+    move |input| {
+        alt((
+            parse_groundout_to(defender).map(|_| GroundoutFlavor::GroundOutTo),
+            parse_hits_a_groundout(batter).map(|_| GroundoutFlavor::HitsAGroundout),
+        )).parse(input)
+    }
+}
+
+pub fn parse_groundout_to<'a, 'b, E: ParseError<&'a str>>(
     defender: &'b PlayerDesc,
 ) -> impl FnMut(&'a str) -> IResult<&str, (), E> + 'b {
     move |input| {
         let (input, _) = tag("Groundout to ").parse(input)?;
-        let (input, _) = tag(defender.name.as_str()).parse(input)?;
+        let (input, _) = parse_player_name(defender).parse(input)?;
         let (input, _) = tag(".").parse(input)?;
+        Ok((input, ()))
+    }
+}
+
+pub fn parse_hits_a_groundout<'a, 'b, E: ParseError<&'a str>>(
+    batter: &'b PlayerDesc,
+) -> impl FnMut(&'a str) -> IResult<&str, (), E> + 'b {
+    move |input| {
+        let (input, _) = parse_player_name(batter).parse(input)?;
+        let (input, _) = tag(" hits a groundout.").parse(input)?;
         Ok((input, ()))
     }
 }
@@ -547,29 +599,71 @@ fn parse_hit_type<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str
 }
 
 pub fn parse_base_hit<'a, 'b, E: ParseError<&'a str>>(
-    batter_name: &'b str,
+    batter: &'b PlayerDesc,
 ) -> impl FnMut(&'a str) -> IResult<&str, (HitType, HitFlavor), E> + 'b {
     move |input| {
         alt((
-            parse_base_hit_flavor(batter_name, " is on with a ")
+            parse_base_hit_flavor(batter, " is on with a ")
                 .map(|hit_type| (hit_type, HitFlavor::IsOnWith)),
-            parse_base_hit_flavor(batter_name, " hits a ")
+            parse_base_hit_flavor(batter, " hits a ")
                 .map(|hit_type| (hit_type, HitFlavor::Hits)),
         )).parse(input)
     }
 }
 
 pub fn parse_base_hit_flavor<'a, 'b, E: ParseError<&'a str>>(
-    batter_name: &'b str,
+    batter: &'b PlayerDesc,
     flavor: &'static str,
 ) -> impl FnMut(&'a str) -> IResult<&str, HitType, E> + 'b {
     move |input| {
-        let (input, _) = tag(batter_name).parse(input)?;
+        let (input, _) = parse_player_name(batter).parse(input)?;
         let (input, _) = tag(flavor).parse(input)?;
         let (input, hit_type) = parse_hit_type.parse(input)?;
         let (input, _) = tag("!").parse(input)?;
 
         Ok((input, hit_type))
+    }
+}
+
+fn parse_base<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, Base, E> {
+    alt((
+        tag("First").map(|_| Base::First),
+        tag("Second").map(|_| Base::Second),
+        tag("Third").map(|_| Base::Third),
+    )).parse(input)
+}
+
+pub enum ParsedPostGroundOut {
+    Advances((Base, AdvancementFlavor)),
+    Scores,
+}
+
+pub fn parse_post_ground_out<'a, 'b, E: ParseError<&'a str>>(
+    runner: &'b RunnerDesc,
+) -> impl FnMut(&'a str) -> IResult<&str, ParsedPostGroundOut, E> + 'b {
+    move |input| {
+        alt((
+            parse_baserunner_advances(runner)
+                .map(|base| ParsedPostGroundOut::Advances(base)),
+            tag("PLACEHOLDER")
+                .map(|_| ParsedPostGroundOut::Scores),
+        )).parse(input)
+    }
+}
+
+pub fn parse_baserunner_advances<'a, 'b, E: ParseError<&'a str>>(
+    runner: &'b RunnerDesc,
+) -> impl FnMut(&'a str) -> IResult<&str, (Base, AdvancementFlavor), E> + 'b {
+    move |input| {
+        let (input, _) = parse_runner_name(runner).parse(input)?;
+        let (input, flavor) = alt((
+            tag(" advances to ").map(|_| AdvancementFlavor::AdvancesTo),
+            tag(" to ").map(|_| AdvancementFlavor::To),
+        )).parse(input)?;
+        let (input, base) = parse_base.parse(input)?;
+        let (input, _) = tag(".").parse(input)?;
+
+        Ok((input, (base, flavor)))
     }
 }
 

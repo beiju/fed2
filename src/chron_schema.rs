@@ -2,6 +2,7 @@ use std::fmt::{Display, Formatter};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use uuid::Uuid;
+use crate::fed_schema::Base;
 
 #[derive(Debug, Copy, Clone, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
@@ -13,6 +14,7 @@ pub enum TeamAtBat {
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct PlayerDesc {
     pub id: Uuid,
     pub name: String,
@@ -24,8 +26,24 @@ impl Display for PlayerDesc {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct RunnerDesc {
+    pub id: Uuid,
+    pub name: String,
+    pub base: i64,
+}
+
+impl Display for RunnerDesc {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name.replace('\'', "&#x27;"))
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct StateDelta {
     #[serde(default, skip_serializing_if = "Option::is_none", with = "::serde_with::rust::double_option")]
     pub batter: Option<Option<PlayerDesc>>,
@@ -33,14 +51,21 @@ pub struct StateDelta {
     pub defenders: Option<Option<Vec<PlayerDesc>>>,
     #[serde(default, skip_serializing_if = "Option::is_none", with = "::serde_with::rust::double_option")]
     pub pitcher: Option<Option<PlayerDesc>>,
+    pub baserunners: Option<Vec<RunnerDesc>>,
     pub started: Option<bool>,
     pub team_at_bat: Option<TeamAtBat>,
+    pub inning: Option<i64>,
+    pub top_of_inning: Option<bool>,
     pub balls: Option<i64>,
     pub strikes: Option<i64>,
     pub outs: Option<i64>,
+    pub home_score: Option<f64>,
+    pub away_score: Option<f64>,
 }
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GameUpdateDelta {
     pub changed_state: StateDelta,
     pub display_delay: i64,
@@ -55,11 +80,16 @@ pub struct State {
     pub batter: Option<PlayerDesc>,
     pub defenders: Option<Vec<PlayerDesc>>,
     pub pitcher: Option<PlayerDesc>,
+    pub baserunners: Vec<RunnerDesc>,
     pub started: bool,
     pub team_at_bat: TeamAtBat,
+    pub inning: i64,
+    pub top_of_inning: bool,
     pub balls: i64,
     pub strikes: i64,
     pub outs: i64,
+    pub home_score: f64,
+    pub away_score: f64,
 }
 
 impl State {
@@ -67,11 +97,16 @@ impl State {
         if let Some(val) = delta.batter { self.batter = val; }
         if let Some(val) = delta.defenders { self.defenders = val; }
         if let Some(val) = delta.pitcher { self.pitcher = val; }
+        if let Some(val) = delta.baserunners { self.baserunners = val; }
         if let Some(val) = delta.started { self.started = val; }
         if let Some(val) = delta.team_at_bat { self.team_at_bat = val; }
+        if let Some(val) = delta.top_of_inning { self.top_of_inning = val; }
+        if let Some(val) = delta.inning { self.inning = val; }
         if let Some(val) = delta.balls { self.balls = val; }
         if let Some(val) = delta.strikes { self.strikes = val; }
         if let Some(val) = delta.outs { self.outs = val; }
+        if let Some(val) = delta.home_score { self.home_score = val; }
+        if let Some(val) = delta.home_score { self.home_score = val; }
     }
 }
 
@@ -87,6 +122,7 @@ pub struct GameUpdate {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GameResponse {
     pub game_id: Uuid,
     pub timestamp: DateTime<Utc>,

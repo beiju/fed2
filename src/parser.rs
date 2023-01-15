@@ -4,8 +4,8 @@ use nom_supreme::error::ErrorTree;
 use nom_supreme::final_parser::{final_parser, Location};
 use nom::Parser as NomParser;
 use nom::sequence::pair;
-use crate::chron_schema::{GameUpdate, GameUpdateDelta, PlayerDesc, State, TeamAtBat};
-use crate::fed_schema::{Contact, Event, FailedFielding, Fielding, MaybeFailedFielding};
+use crate::chron_schema::{GameUpdate, GameUpdateDelta, PlayerDesc, RunnerDesc, State, TeamAtBat};
+use crate::fed_schema::{Advancement, Contact, Event, FailedFielding, Fielding, GroundoutFlavor, HitFlavor, HitType, MaybeFailedFielding, RunnerAdvancement, RunnerAdvancementDesc};
 use crate::text_parsers::*;
 
 #[derive(Debug, Default)]
@@ -18,8 +18,9 @@ enum ParserExpectedEvent {
     PostPitchEmpty(Event),
     PostAppearanceEmpty(Event),
     Contact(Contact),
-    Fielding(Contact, Fielding),
-    FailedFielding(Contact, FailedFielding),
+    Fielding(Contact, Fielding, Vec<RunnerDesc>),
+    FailedFielding(Contact, FailedFielding, Vec<RunnerDesc>),
+    PostGroundOut(Contact, Fielding, GroundoutFlavor, Vec<RunnerAdvancementDesc>, Vec<RunnerDesc>),
 }
 
 #[derive(Debug, Default)]
@@ -111,6 +112,8 @@ impl Parser {
                             None
                         }
                         ParsedFoulOrContact::Contact((flavor, location)) => {
+
+
                             self.next_event_genre = ParserExpectedEvent::Contact(Contact {
                                 batter: batter.clone(),
                                 flavor,
@@ -162,49 +165,93 @@ impl Parser {
                             self.next_event_genre = ParserExpectedEvent::Fielding(contact, Fielding {
                                 defender,
                                 flavor,
-                            });
+                            }, prev_state.baserunners);
                             None
                         }
                         ParsedPostContact::FailedFielding(defender, flavor) => {
                             self.next_event_genre = ParserExpectedEvent::FailedFielding(contact, FailedFielding {
                                 defender,
                                 flavor,
-                            });
+                            }, prev_state.baserunners);
                             None
                         }
                     }
                 }
             }
-            ParserExpectedEvent::Fielding(contact, fielding) => {
-                if self.state.outs == prev_state.outs + 1 {
-                    // Fielding out
-                    run_parser(parse_groundout(&fielding.defender))(&delta.display_text)?;
+            ParserExpectedEvent::Fielding(contact, fielding, baserunners_before) => {
+                // Unfortunately we can't rely on `outs` to tell whether this is a hit or an out
+                let parsed = run_parser(parse_fielding_result(&contact.batter, &fielding.defender))(&delta.display_text)?;
+                match parsed {
+                    FieldingResult::Groundout(flavor) => {
+                        if baserunners_before.is_empty() {
+                            self.next_event_genre = ParserExpectedEvent::BatterUp;
+                            Some(Event::GroundOut {
+                                contact,
+                                fielding,
+                                flavor,
+                                advancements: Vec::new()
+                            })
+                        } else {
+                            self.next_event_genre = ParserExpectedEvent::PostGroundOut(contact, fielding, flavor, Vec::new(), baserunners_before);
+                            None
+                        }
+                    }
+                    FieldingResult::Hit((hit_type, flavor)) => {
+                        self.emit_hit(contact, fielding, hit_type, flavor, baserunners_before)
+                    }
+                }
+            }
+            ParserExpectedEvent::FailedFielding(contact, fielding, baserunners_before) => {
+                let (hit_type, flavor) = run_parser(parse_base_hit(&contact.batter))(&delta.display_text)?;
+                self.emit_hit(contact, fielding, hit_type, flavor, baserunners_before)
+            }
+            ParserExpectedEvent::PostGroundOut(contact, fielding, flavor, mut advancements, baserunners_before) => {
+                let (last_runner, other_runners) = baserunners_before.split_last()
+                    .ok_or_else(|| anyhow!("Expected baserunners in PostGroundOut state"))?;
+                let parsed = run_parser(parse_post_ground_out(last_runner))(&delta.display_text)?;
+                match parsed {
+                    ParsedPostGroundOut::Advances((to_base, flavor)) => {
+                        advancements.push(RunnerAdvancementDesc {
+                            runner: last_runner.clone(),
+                            advancement: RunnerAdvancement::Advanced(to_base, flavor),
+                        });
+                    }
+                    ParsedPostGroundOut::Scores => {
+                        todo!()
+                    }
+                }
+                if other_runners.is_empty() {
                     self.next_event_genre = ParserExpectedEvent::BatterUp;
                     Some(Event::GroundOut {
                         contact,
-                        defender: fielding.defender,
-                        flavor: fielding.flavor,
+                        fielding,
+                        flavor,
+                        advancements,
                     })
                 } else {
-                    self.parse_hit(&delta.display_text, contact, fielding)?
+                    todo!()
                 }
-            }
-            ParserExpectedEvent::FailedFielding(contact, fielding) => {
-                self.parse_hit(&delta.display_text, contact, fielding)?
             }
         };
 
         Ok((event, &self.state))
     }
 
-    fn parse_hit(&mut self, display_text: &str, contact: Contact, fielding: impl Into<MaybeFailedFielding>) -> anyhow::Result<Option<Event>> {
-        let (hit_type, flavor) = run_parser(parse_base_hit(&contact.batter.name))(display_text)?;
+    fn emit_hit(&mut self,
+                contact: Contact,
+                fielding: impl Into<MaybeFailedFielding>,
+                hit_type: HitType,
+                flavor: HitFlavor,
+                baserunners_before: Vec<RunnerDesc>
+    ) -> Option<Event> {
         self.next_event_genre = ParserExpectedEvent::BatterUp;
-        Ok(Some(Event::Hit {
+        Some(Event::Hit {
             contact,
             fielding: fielding.into(),
             hit_type,
             flavor,
-        }))
+            advancements: vec![],
+            scores: vec![],
+        })
     }
 }

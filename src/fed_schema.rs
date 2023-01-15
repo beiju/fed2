@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display, Formatter, write};
 use anyhow::anyhow;
 use uuid::Uuid;
-use crate::chron_schema::{GameUpdate, PlayerDesc, State, TeamAtBat};
+use crate::chron_schema::{GameUpdate, PlayerDesc, RunnerDesc, State, TeamAtBat};
 
 #[derive(Debug, Copy, Clone)]
 pub enum PitchAdjective {
@@ -342,6 +342,12 @@ pub enum FlyoutFlavor {
 }
 
 #[derive(Debug, Copy, Clone)]
+pub enum GroundoutFlavor {
+    GroundOutTo,
+    HitsAGroundout,
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum FieldingFlavor {
     ChargesForIt,
     CollectsIt,
@@ -528,6 +534,57 @@ impl Into<MaybeFailedFielding> for FailedFielding {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum Base {
+    First,
+    Second,
+    Third,
+}
+
+impl Display for Base {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Base::First => { write!(f, "First") }
+            Base::Second => { write!(f, "Second") }
+            Base::Third => { write!(f, "Third") }
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum AdvancementFlavor {
+    To,
+    AdvancesTo,
+}
+
+impl Display for AdvancementFlavor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AdvancementFlavor::To => { write!(f, "to") }
+            AdvancementFlavor::AdvancesTo => { write!(f, "advances to") }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Advancement {
+    pub runner: PlayerDesc,
+    pub to_base: Base,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum RunnerAdvancement {
+    None,
+    Advanced(Base, AdvancementFlavor),
+    Scored
+}
+
+#[derive(Debug)]
+pub struct RunnerAdvancementDesc {
+    pub runner: RunnerDesc,
+    pub advancement: RunnerAdvancement,
+}
+
 #[derive(Debug)]
 pub enum Event {
     PlayBall,
@@ -541,8 +598,9 @@ pub enum Event {
     },
     GroundOut {
         contact: Contact,
-        defender: PlayerDesc,
-        flavor: FieldingFlavor,
+        fielding: Fielding,
+        flavor: GroundoutFlavor,
+        advancements: Vec<RunnerAdvancementDesc>,
     },
     Strikeout {
         batter: PlayerDesc,
@@ -557,6 +615,8 @@ pub enum Event {
         fielding: MaybeFailedFielding,
         hit_type: HitType,
         flavor: HitFlavor,
+        advancements: Vec<Advancement>,
+        scores: Vec<PlayerDesc>,
     }
 }
 
@@ -598,7 +658,7 @@ impl Event {
                     BallFlavor::JustMisses => { format!("{} just misses the zone. Ball, {count}.", pitcher) }
                     BallFlavor::LaysOffOutside => { format!("{} lays off outside. {count}.", pitcher) }
                     BallFlavor::LooksAtBallOutside => { format!("{} looks at a ball outside. {count}.", batter) }
-                    BallFlavor::MissesBigTime => { format!("{} misses big time. {count}.", pitcher) }
+                    BallFlavor::MissesBigTime => { format!("{} misses big time. Ball, {count}.", pitcher) }
                     BallFlavor::Stumbles => { format!("{} stumbles. {count}.", pitcher) }
                     BallFlavor::ThrowsOutside => { format!("{} throws it outside. Ball, {count}.", pitcher) }
                 };
@@ -655,12 +715,30 @@ impl Event {
                 };
                 vec![text, String::new()]
             }
-            Event::GroundOut { contact, defender, flavor } => {
-                vec![
+            Event::GroundOut { contact, fielding, flavor, advancements } => {
+                let text = match flavor {
+                    GroundoutFlavor::GroundOutTo => { format!("Groundout to {}.", fielding.defender) }
+                    GroundoutFlavor::HitsAGroundout => { format!("{} hits a groundout.", contact.batter) }
+                };
+                let mut result = vec![
                     contact.to_string(),
-                    format!("{} {flavor}", defender),
-                    format!("Groundout to {}.", defender),
-                ]
+                    fielding.to_string(),
+                    text,
+                ];
+
+                for advancement in advancements {
+                    match advancement.advancement {
+                        RunnerAdvancement::None => {}
+                        RunnerAdvancement::Advanced(base, flavor) => {
+                            result.push(format!("{} {flavor} {base}.", advancement.runner));
+                        }
+                        RunnerAdvancement::Scored => {
+                            todo!()
+                        }
+                    }
+                }
+
+                result
             }
             Event::HomeRun { contact } => {
                 vec![
@@ -669,12 +747,22 @@ impl Event {
                     String::new(),
                 ]
             }
-            Event::Hit { contact, fielding, hit_type, flavor } => {
-                vec![
+            Event::Hit { contact, fielding, hit_type, flavor, advancements, scores } => {
+                let mut lines = vec![
                     contact.to_string(),
                     fielding.to_string(),
                     format!("{} {} {}!", contact.batter, flavor, hit_type),
-                ]
+                ];
+
+                for advancement in advancements {
+                    lines.push(format!("{} advances to {}!", advancement.runner, advancement.to_base));
+                }
+
+                for runner in scores {
+                    lines.push(format!("{runner} scores!"));
+                }
+
+                lines
             }
         })
     }
