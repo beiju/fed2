@@ -81,16 +81,26 @@ pub enum ParsedStrikeOrFoul {
     Foul(FoulFlavor),
 }
 
-pub fn parse_strike_or_foul<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitcher_name: &'b str, batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, ParsedStrikeOrFoul, E> + 'b {
+pub fn parse_strike_or_foul<'a, 'b, E: ParseError<&'a str>>(
+    balls: i64,
+    strikes: i64,
+    pitcher: &'b PlayerDesc,
+    batter: &'b PlayerDesc,
+) -> impl FnMut(&'a str) -> IResult<&'a str, ParsedStrikeOrFoul, E> + 'b {
     move |input| {
         alt((
-            parse_strike(balls, strikes, pitcher_name, batter_name).map(|res| ParsedStrikeOrFoul::Strike(res)),
-            parse_foul(balls, strikes, batter_name).map(|res| ParsedStrikeOrFoul::Foul(res)),
+            parse_strike(balls, strikes, pitcher, batter).map(|res| ParsedStrikeOrFoul::Strike(res)),
+            parse_foul(balls, strikes, batter).map(|res| ParsedStrikeOrFoul::Foul(res)),
         )).parse(input)
     }
 }
 
-pub fn parse_strike<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitcher_name: &'b str, batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, StrikeFlavor, E> + 'b {
+pub fn parse_strike<'a, 'b, E: ParseError<&'a str>>(
+    balls: i64,
+    strikes: i64,
+    pitcher: &'b PlayerDesc,
+    batter: &'b PlayerDesc,
+) -> impl FnMut(&'a str) -> IResult<&'a str, StrikeFlavor, E> + 'b {
     move |input| {
         alt((
             count_dot(balls, strikes, tag("Strike,"))
@@ -99,17 +109,17 @@ pub fn parse_strike<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pi
                 .map(|_| StrikeFlavor::Looking),
             count_dot(balls, strikes, tag("Strike, swinging."))
                 .map(|_| StrikeFlavor::Swinging),
-            count_dot(balls, strikes, preceded(tag(pitcher_name), tag(" throws a strike.")))
+            count_dot(balls, strikes, preceded(parse_player_name(pitcher), tag(" throws a strike.")))
                 .map(|_| StrikeFlavor::ThrowsAStrike),
-            count_dot(balls, strikes, preceded(tag(batter_name), tag(" is caught looking. Strike,")))
+            count_dot(balls, strikes, preceded(parse_player_name(batter), tag(" is caught looking. Strike,")))
                 .map(|_| StrikeFlavor::CaughtLooking),
-            count_dot(balls, strikes, preceded(tag(batter_name), tag(" chases. Strike,")))
+            count_dot(balls, strikes, preceded(parse_player_name(batter), tag(" chases. Strike,")))
                 .map(|_| StrikeFlavor::Chases),
-            count_dot(balls, strikes, preceded(tag(batter_name), tag(" guesses wrong. Strike,")))
+            count_dot(balls, strikes, preceded(parse_player_name(batter), tag(" guesses wrong. Strike,")))
                 .map(|_| StrikeFlavor::GuessesWrong),
-            count_dot(balls, strikes, parse_swing_with_adjective(batter_name))
+            count_dot(balls, strikes, parse_swing_with_adjective(batter))
                 .map(|adj| StrikeFlavor::AdjectiveSwing(adj)),
-            count_dot(balls, strikes, preceded(tag(pitcher_name), tag(" drops it in. Strike,")))
+            count_dot(balls, strikes, preceded(parse_player_name(pitcher), tag(" drops it in. Strike,")))
                 .map(|_| StrikeFlavor::DropsItIn),
         )).parse(input)
     }
@@ -124,9 +134,11 @@ fn parse_swing_adjective<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<
     )).parse(input)
 }
 
-pub fn parse_swing_with_adjective<'a, 'b, E: ParseError<&'a str>>(batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, SwingAdjective, E> + 'b {
+pub fn parse_swing_with_adjective<'a, 'b, E: ParseError<&'a str>>(
+    batter: &'b PlayerDesc,
+) -> impl FnMut(&'a str) -> IResult<&'a str, SwingAdjective, E> + 'b {
     move |input| {
-        let (input, _) = tag(batter_name).parse(input)?;
+        let (input, _) = parse_player_name(batter).parse(input)?;
         let (input, _) = tag(" takes a ").parse(input)?;
         let (input, adjective) = parse_swing_adjective.parse(input)?;
         let (input, _) = tag(" swing. Strike,").parse(input)?;
@@ -136,16 +148,20 @@ pub fn parse_swing_with_adjective<'a, 'b, E: ParseError<&'a str>>(batter_name: &
 }
 
 
-pub fn parse_foul<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, batter_name: &'b str) -> impl FnMut(&'a str) -> IResult<&'a str, FoulFlavor, E> + 'b {
+pub fn parse_foul<'a, 'b, E: ParseError<&'a str>>(
+    balls: i64,
+    strikes: i64,
+    batter: &'b PlayerDesc,
+) -> impl FnMut(&'a str) -> IResult<&'a str, FoulFlavor, E> + 'b {
     move |input| {
         alt((
             count_dot(balls, strikes, tag("Foul ball."))
                 .map(|_| FoulFlavor::FoulBall),
             count_dot(balls, strikes, tag("Foul tip."))
                 .map(|_| FoulFlavor::FoulTip),
-            count_dot(balls, strikes, preceded(tag(batter_name), tag(" fouls it back.")))
+            count_dot(balls, strikes, preceded(parse_player_name(batter), tag(" fouls it back.")))
                 .map(|_| FoulFlavor::FoulsItBack),
-            count_dot(balls, strikes, preceded(tag(batter_name), tag(" fouls it off.")))
+            count_dot(balls, strikes, preceded(parse_player_name(batter), tag(" fouls it off.")))
                 .map(|_| FoulFlavor::FoulsItOff),
         )).parse(input)
     }
@@ -188,34 +204,52 @@ pub fn parse_strikeout_batter_named<'a, 'b, E: ParseError<&'a str>>(
 
 pub enum ParsedFoulOrContact {
     Foul(FoulFlavor),
-    Contact((ContactFlavor, Option<FieldLocation>))
+    Walk(WalkFlavor),
+    Contact((ContactFlavor, Option<FieldLocation>)),
 }
 
-pub fn parse_foul_or_contact<'a, 'b, E: ParseError<&'a str>>(
+pub fn parse_foul_walk_or_contact<'a, 'b, E: ParseError<&'a str>>(
     balls: i64,
     strikes: i64,
-    batter_name: &'b str
+    batter: &'b PlayerDesc
 ) -> impl FnMut(&'a str) -> IResult<&'a str, ParsedFoulOrContact, E> + 'b {
     move |input| {
         alt((
-            parse_foul(balls, strikes, batter_name).map(|r| ParsedFoulOrContact::Foul(r)),
-            parse_contact(batter_name).map(|r| ParsedFoulOrContact::Contact(r)),
+            parse_foul(balls, strikes, batter).map(|r| ParsedFoulOrContact::Foul(r)),
+            parse_walk(batter).map(|r| ParsedFoulOrContact::Walk(r)),
+            parse_contact(batter).map(|r| ParsedFoulOrContact::Contact(r)),
+        )).parse(input)
+    }
+}
+
+
+pub fn parse_walk<'a, 'b, E: ParseError<&'a str>>(
+    batter: &'b PlayerDesc,
+) -> impl FnMut(&'a str) -> IResult<&'a str, WalkFlavor, E> + 'b {
+    move |input| {
+        alt((
+            pair(tag("Ball 4. "), pair(parse_player_name(batter), tag(" takes their base.")))
+                .map(|_| WalkFlavor::Ball4),
+            pair(parse_player_name(batter), tag(" draws a walk."))
+                .map(|_| WalkFlavor::DrawsWalk),
+            pair(parse_player_name(batter), tag(" earns a walk."))
+                .map(|_| WalkFlavor::EarnsWalk),
         )).parse(input)
     }
 }
 
 
 pub fn parse_contact<'a, 'b, E: ParseError<&'a str>>(
-    batter_name: &'b str
+    batter: &'b PlayerDesc,
 ) -> impl FnMut(&'a str) -> IResult<&'a str, (ContactFlavor, Option<FieldLocation>), E> + 'b {
     move |input| {
         alt((
-            parse_contact_named_with_sound(batter_name)
+            parse_contact_named_with_sound(batter)
                 .map(|(sound_effect, verb, location)| (
                     ContactFlavor::NamedWithSound { sound_effect, verb },
                     Some(location)
                 )),
-            parse_contact_named(batter_name)
+            parse_contact_named(batter)
                 .map(|(verb, pitch_descriptor, location)| (
                     ContactFlavor::Named { verb, pitch_descriptor },
                     location
@@ -261,7 +295,7 @@ fn parse_pitch_adjective<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<
 }
 
 pub fn parse_contact_named_with_sound<'a, 'b, E: ParseError<&'a str>>(
-    batter_name: &'b str
+    batter: &'b PlayerDesc
 ) -> impl FnMut(&'a str) -> IResult<&'a str, (SoundEffect, ContactVerb, FieldLocation), E> + 'b {
     move |input| {
         let (input, sound_effect) = alt((
@@ -273,7 +307,7 @@ pub fn parse_contact_named_with_sound<'a, 'b, E: ParseError<&'a str>>(
             tag("THWACK! ").map(|_| SoundEffect::Thwack),
             tag("WHAM! ").map(|_| SoundEffect::Wham),
         )).parse(input)?;
-        let (input, _) = tag(batter_name).parse(input)?;
+        let (input, _) = parse_player_name(batter).parse(input)?;
         let (input, _) = tag(" ").parse(input)?;
         let (input, verb) = parse_contact_verb.parse(input)?;
         let (input, _) = tag(" it to ").parse(input)?;
@@ -321,10 +355,10 @@ fn parse_contact_adjective<'a, E: ParseError<&'a str>>(input: &'a str) -> IResul
 }
 
 pub fn parse_contact_named<'a, 'b, E: ParseError<&'a str>>(
-    batter_name: &'b str
+    batter: &'b PlayerDesc,
 ) -> impl FnMut(&'a str) -> IResult<&str, (ContactVerb, PitchDescriptor, Option<FieldLocation>), E> + 'b {
     move |input| {
-        let (input, _) = tag(batter_name).parse(input)?;
+        let (input, _) = parse_player_name(batter).parse(input)?;
         let (input, _) = tag(" ").parse(input)?;
         let (input, verb) = parse_contact_verb.parse(input)?;
         let (input, (descriptor, location)) = alt((

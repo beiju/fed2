@@ -77,7 +77,7 @@ impl Parser {
                     let batter = self.state.batter.as_ref()
                         .ok_or_else(|| anyhow!("Expected non-null batter in a Strike/Foul event"))?;
 
-                    let parsed = run_parser(parse_strike_or_foul(self.state.balls, self.state.strikes, &pitcher.name, &batter.name))(&delta.display_text)?;
+                    let parsed = run_parser(parse_strike_or_foul(self.state.balls, self.state.strikes, pitcher, batter))(&delta.display_text)?;
                     let event = match parsed {
                         ParsedStrikeOrFoul::Strike(flavor) => { Event::Strike(flavor) }
                         ParsedStrikeOrFoul::Foul(flavor) => { Event::Foul(flavor) }
@@ -103,17 +103,22 @@ impl Parser {
                     let batter = prev_state.batter.as_ref()
                         .ok_or_else(|| anyhow!("Expected non-null batter before a Foul/Contact sub-event"))?;
 
-                    let parsed = run_parser(parse_foul_or_contact(
-                        self.state.balls, self.state.strikes, &batter.name,
+                    let parsed = run_parser(parse_foul_walk_or_contact(
+                        self.state.balls, self.state.strikes, batter,
                     ))(&delta.display_text)?;
                     match parsed {
                         ParsedFoulOrContact::Foul(flavor) => {
                             self.next_event_genre = ParserExpectedEvent::PostPitchEmpty(Event::Foul(flavor));
                             None
                         }
+                        ParsedFoulOrContact::Walk(flavor) => {
+                            self.next_event_genre = ParserExpectedEvent::BatterUp;
+                            Some(Event::Walk {
+                                batter: batter.clone(),
+                                flavor,
+                            })
+                        }
                         ParsedFoulOrContact::Contact((flavor, location)) => {
-
-
                             self.next_event_genre = ParserExpectedEvent::Contact(Contact {
                                 batter: batter.clone(),
                                 flavor,

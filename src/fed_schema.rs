@@ -585,6 +585,13 @@ pub struct RunnerAdvancementDesc {
     pub advancement: RunnerAdvancement,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum WalkFlavor {
+    Ball4,
+    DrawsWalk,
+    EarnsWalk,
+}
+
 #[derive(Debug)]
 pub enum Event {
     PlayBall,
@@ -617,6 +624,10 @@ pub enum Event {
         flavor: HitFlavor,
         advancements: Vec<Advancement>,
         scores: Vec<PlayerDesc>,
+    },
+    Walk {
+        batter: PlayerDesc,
+        flavor: WalkFlavor,
     }
 }
 
@@ -763,6 +774,15 @@ impl Event {
                 }
 
                 lines
+            }
+            Event::Walk { batter, flavor } => {
+                let walk_text = match flavor {
+                    WalkFlavor::Ball4 => { format!("Ball 4. {batter} takes their base.") }
+                    WalkFlavor::DrawsWalk => { format!("{batter} draws a walk.") }
+                    WalkFlavor::EarnsWalk => { format!("{batter} earns a walk.") }
+                };
+
+                vec![walk_text]
             }
         })
     }
