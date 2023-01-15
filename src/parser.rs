@@ -51,12 +51,21 @@ impl Parser {
                 Some(Event::PlayBall)
             }
             ParserExpectedEvent::BatterUp => {
-                let batter = self.state.batter.as_ref()
-                    .ok_or_else(|| anyhow!("Expected non-null batter in a BatterUp event"))?;
+                if self.state.outs == 0 && prev_state.outs > 2 {
+                    run_parser(parse_half_inning_end(prev_state.top_of_inning, prev_state.inning))(&delta.display_text)?;
+                    self.next_event_genre = ParserExpectedEvent::BatterUp;
+                    Some(Event::EndOfHalfInning {
+                        top_of_inning: prev_state.top_of_inning,
+                        inning: prev_state.inning,
+                    })
+                } else {
+                    let batter = self.state.batter.as_ref()
+                        .ok_or_else(|| anyhow!("Expected non-null batter in a BatterUp event"))?;
 
-                run_parser(pair(tag(batter.name.as_str()), tag(" steps up to bat.")))(&delta.display_text)?;
-                self.next_event_genre = ParserExpectedEvent::Pitch;
-                Some(Event::BatterUp)
+                    run_parser(pair(tag(batter.name.as_str()), tag(" steps up to bat.")))(&delta.display_text)?;
+                    self.next_event_genre = ParserExpectedEvent::Pitch;
+                    Some(Event::BatterUp)
+                }
             }
             ParserExpectedEvent::Pitch => {
                 if self.state.balls == prev_state.balls + 1 {

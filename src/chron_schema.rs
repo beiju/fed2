@@ -74,7 +74,7 @@ pub struct GameUpdateDelta {
     pub display_time: DateTime<Utc>,
 }
 
-#[derive(Debug, Default, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct State {
     pub batter: Option<PlayerDesc>,
@@ -90,6 +90,26 @@ pub struct State {
     pub outs: i64,
     pub home_score: f64,
     pub away_score: f64,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            batter: None,
+            defenders: None,
+            pitcher: None,
+            baserunners: vec![],
+            started: false,
+            team_at_bat: Default::default(),
+            inning: 0,
+            top_of_inning: true,
+            balls: 0,
+            strikes: 0,
+            outs: 0,
+            home_score: 0.0,
+            away_score: 0.0,
+        }
+    }
 }
 
 impl State {

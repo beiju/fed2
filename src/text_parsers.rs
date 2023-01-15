@@ -701,6 +701,21 @@ pub fn parse_baserunner_advances<'a, 'b, E: ParseError<&'a str>>(
     }
 }
 
+pub fn parse_half_inning_end<'a, 'b, E: ParseError<&'a str>>(
+    top_of_inning: bool,
+    inning: i64,
+) -> impl FnMut(&'a str) -> IResult<&str, (), E> + 'b {
+    move |input| {
+        let (input, _) = tag("End of the ").parse(input)?;
+        let (input, _) = tag(if top_of_inning { "top" } else { "bottom" }).parse(input)?;
+        let (input, _) = tag(" of the ").parse(input)?;
+        let (input, _) = tag(format!("{}", inning + 1).as_str()).parse(input)?;
+        let (input, _) = tag(".").parse(input)?;
+
+        Ok((input, ()))
+    }
+}
+
 pub(crate) fn parse_terminated<'s, E: ParseError<&'s str>>(tag_content: &str) -> impl Fn(&'s str) -> IResult<&'s str, &'s str, E> + '_ {
     move |input| {
         let (input, parsed_value) = if tag_content == "." {

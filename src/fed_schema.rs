@@ -65,7 +65,7 @@ pub enum SwingAdjective {
     Pathetic,
     Poor,
     Sad,
-    Weak
+    Weak,
 }
 
 impl Display for SwingAdjective {
@@ -251,14 +251,14 @@ pub enum ContactFlavor {
     },
     Adjective {
         adjective: ContactAdjective,
-    }
+    },
 }
 
 #[derive(Debug, Clone)]
 pub struct Contact {
     pub batter: PlayerDesc,
     pub location: Option<FieldLocation>,
-    pub flavor: ContactFlavor
+    pub flavor: ContactFlavor,
 }
 
 impl Display for Contact {
@@ -338,7 +338,7 @@ pub enum FlyoutFlavor {
     FlyOutTo,
     IsRightThere,
     MakesCatch,
-    MakesCatchWithAdjective(CatchAdjective)
+    MakesCatchWithAdjective(CatchAdjective),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -353,7 +353,8 @@ pub enum FieldingFlavor {
     CollectsIt,
     CorralsIt,
     DashesForIt,
-    DivesForIt, // can this precede a flyout?
+    DivesForIt,
+    // can this precede a flyout?
     FieldsIt,
     GetsInFrontOfIt,
     GetsIt,
@@ -495,13 +496,13 @@ impl Display for HitType {
 #[derive(Debug, Copy, Clone)]
 pub enum HitFlavor {
     Hits,
-    IsOnWith
+    IsOnWith,
 }
 
 impl Display for HitFlavor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            HitFlavor::Hits => { write!(f, "hits a")}
+            HitFlavor::Hits => { write!(f, "hits a") }
             HitFlavor::IsOnWith => { write!(f, "is on with a") }
         }
     }
@@ -576,7 +577,7 @@ pub struct Advancement {
 pub enum RunnerAdvancement {
     None,
     Advanced(Base, AdvancementFlavor),
-    Scored
+    Scored,
 }
 
 #[derive(Debug)]
@@ -628,7 +629,11 @@ pub enum Event {
     Walk {
         batter: PlayerDesc,
         flavor: WalkFlavor,
-    }
+    },
+    EndOfHalfInning {
+        top_of_inning: bool,
+        inning: i64,
+    },
 }
 
 struct Count(i64, i64);
@@ -657,8 +662,8 @@ impl Event {
                 let batter = state.batter.as_ref()
                     .ok_or_else(|| anyhow!("Expected non-null batter in a Ball event"))?;
                 let text = match flavor {
-                    BallFlavor::BallPeriod => { format!("Ball. {count}.")  }
-                    BallFlavor::BallComma => { format!("Ball, {count}.")  }
+                    BallFlavor::BallPeriod => { format!("Ball. {count}.") }
+                    BallFlavor::BallComma => { format!("Ball, {count}.") }
                     BallFlavor::WayOutside => { format!("Ball, way outside. {count}") }
                     BallFlavor::JustOutside => { format!("Ball, just outside. {count}.") }
                     BallFlavor::ExtremelyOutside => { format!("Ball, extremely outside. {count}.") }
@@ -704,7 +709,7 @@ impl Event {
                 };
                 vec![contact.to_string(), flyout_text]
             }
-            Event::Strikeout { batter, flavor}  => {
+            Event::Strikeout { batter, flavor } => {
                 let pitcher = state.pitcher.as_ref()
                     .ok_or_else(|| anyhow!("Expected non-null pitcher in a Strikeout event"))?;
                 let text = match flavor {
@@ -783,6 +788,10 @@ impl Event {
                 };
 
                 vec![walk_text]
+            }
+            Event::EndOfHalfInning { top_of_inning, inning } => {
+                vec![format!("End of the {} of the {}.",
+                             if *top_of_inning { "top" } else { "bottom" }, inning + 1)]
             }
         })
     }
