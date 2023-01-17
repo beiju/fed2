@@ -21,6 +21,7 @@ enum ParserExpectedEvent {
     Fielding(Contact, Fielding, Vec<RunnerDesc>),
     FailedFielding(Contact, FailedFielding, Vec<RunnerDesc>),
     PostGroundOut(Contact, Fielding, GroundoutFlavor, Vec<RunnerAdvancementDesc>, Vec<RunnerDesc>),
+    PostForceOut(Contact, Fielding, RunnerDesc),
 }
 
 #[derive(Debug, Default)]
@@ -194,7 +195,7 @@ impl Parser {
             }
             ParserExpectedEvent::Fielding(contact, fielding, baserunners_before) => {
                 // Unfortunately we can't rely on `outs` to tell whether this is a hit or an out
-                let parsed = run_parser(parse_fielding_result(&contact.batter, &fielding.defender))(&delta.display_text)?;
+                let parsed = run_parser(parse_fielding_result(&contact.batter, &fielding.defender, &baserunners_before))(&delta.display_text)?;
                 match parsed {
                     FieldingResult::Groundout(flavor) => {
                         if baserunners_before.is_empty() {
@@ -212,6 +213,12 @@ impl Parser {
                     }
                     FieldingResult::Hit((hit_type, flavor)) => {
                         self.emit_hit(contact, fielding, hit_type, flavor, baserunners_before)
+                    }
+                    FieldingResult::ForceOut(runner) => {
+                        let runner_out = runner.clone();
+                        drop(parsed);
+                        self.next_event_genre = ParserExpectedEvent::PostForceOut(contact, fielding, runner_out);
+                        None
                     }
                 }
             }
@@ -245,6 +252,15 @@ impl Parser {
                 } else {
                     todo!()
                 }
+            }
+            ParserExpectedEvent::PostForceOut(contact, fielding, runner_out) => {
+                run_parser(tag("Fielder's choice."))(&delta.display_text)?;
+                self.next_event_genre = ParserExpectedEvent::BatterUp;
+                Some(Event::FieldersChoice {
+                    contact,
+                    fielding,
+                    runner_out,
+                })
             }
         };
 

@@ -516,7 +516,7 @@ fn parse_failed_fielding_flavor<'a, E: ParseError<&'a str>>(input: &'a str) -> I
         tag("can't corral it...").map(|_| FailedFieldingFlavor::CantCorralIt),
         tag("can't field it...").map(|_| FailedFieldingFlavor::CantFieldIt),
         tag("can't get it...").map(|_| FailedFieldingFlavor::CantGetIt),
-        tag("can't make the catch!").map(|_| FailedFieldingFlavor::CantMakeTheCatch),
+        tag("can't make the catch...").map(|_| FailedFieldingFlavor::CantMakeTheCatch),
         tag("can't scoop it...").map(|_| FailedFieldingFlavor::CantScoopIt),
         tag("can't secure it...").map(|_| FailedFieldingFlavor::CantSecureIt),
         tag("drops it!").map(|_| FailedFieldingFlavor::DropsIt),
@@ -574,19 +574,22 @@ pub fn parse_name_from_list<'a, 'b, E: ParseError<&'a str>>(
     }
 }
 
-pub enum FieldingResult {
+pub enum FieldingResult<'a> {
     Groundout(GroundoutFlavor),
-    Hit((HitType, HitFlavor))
+    Hit((HitType, HitFlavor)),
+    ForceOut(&'a RunnerDesc)
 }
 
 pub fn parse_fielding_result<'a, 'b, E: ParseError<&'a str>>(
     batter: &'b PlayerDesc,
     defender: &'b PlayerDesc,
-) -> impl FnMut(&'a str) -> IResult<&str, FieldingResult, E> + 'b {
+    runners: &'b [RunnerDesc],
+) -> impl FnMut(&'a str) -> IResult<&str, FieldingResult<'b>, E> + 'b {
     move |input| {
         alt((
             parse_groundout(batter, defender).map(|r| FieldingResult::Groundout(r)),
-            parse_base_hit(batter).map(|r| FieldingResult::Hit(r))
+            parse_base_hit(batter).map(|r| FieldingResult::Hit(r)),
+            parse_force_out(runners).map(|r| FieldingResult::ForceOut(r)),
         )).parse(input)
     }
 }
@@ -598,7 +601,8 @@ pub fn parse_groundout<'a, 'b, E: ParseError<&'a str>>(
     move |input| {
         alt((
             parse_groundout_to(defender).map(|_| GroundoutFlavor::GroundOutTo),
-            parse_hits_a_groundout(batter).map(|_| GroundoutFlavor::HitsAGroundout),
+            pair(parse_player_name(batter), tag(" hits a groundout.")).map(|_| GroundoutFlavor::HitsAGroundout),
+            pair(parse_player_name(batter), tag(" is forced out at first.")).map(|_| GroundoutFlavor::ForcedOutAtFirst),
         )).parse(input)
     }
 }
@@ -614,22 +618,44 @@ pub fn parse_groundout_to<'a, 'b, E: ParseError<&'a str>>(
     }
 }
 
-pub fn parse_hits_a_groundout<'a, 'b, E: ParseError<&'a str>>(
-    batter: &'b PlayerDesc,
-) -> impl FnMut(&'a str) -> IResult<&str, (), E> + 'b {
-    move |input| {
-        let (input, _) = parse_player_name(batter).parse(input)?;
-        let (input, _) = tag(" hits a groundout.").parse(input)?;
-        Ok((input, ()))
-    }
-}
-
 fn parse_hit_type<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, HitType, E> {
     alt((
         tag("Single").map(|_| HitType::Single),
         tag("Double").map(|_| HitType::Double),
         tag("Triple").map(|_| HitType::Triple),
     )).parse(input)
+}
+
+pub fn parse_force_out<'a, 'b, E: ParseError<&'a str>>(
+    runners: &'b [RunnerDesc],
+) -> impl FnMut(&'a str) -> IResult<&str, &'b RunnerDesc, E> + 'b {
+    move |input| {
+        for runner in runners {
+            let (input, result) = opt(parse_force_out_for_runner(runner)).parse(input)?;
+            if result.is_some() {
+                return Ok((input, runner))
+            }
+        }
+        fail(input)
+    }
+}
+
+pub fn parse_force_out_for_runner<'a, 'b, E: ParseError<&'a str>>(
+    runner: &'b RunnerDesc,
+) -> impl FnMut(&'a str) -> IResult<&str, (), E> + 'b {
+    move |input| {
+        let (input, _) = parse_runner_name(runner).parse(input)?;
+        let (input, _) = tag(" is forced out at ").parse(input)?;
+        let (input, _) = tag(match runner.base {
+            1 => "Second",
+            2 => "Third",
+            3 => "Fourth",
+            _ => return fail(input)
+        }).parse(input)?;
+        let (input, _) = tag(".").parse(input)?;
+
+        Ok((input, ()))
+    }
 }
 
 pub fn parse_base_hit<'a, 'b, E: ParseError<&'a str>>(

@@ -345,6 +345,7 @@ pub enum FlyoutFlavor {
 pub enum GroundoutFlavor {
     GroundOutTo,
     HitsAGroundout,
+    ForcedOutAtFirst,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -447,7 +448,7 @@ impl Display for FailedFieldingFlavor {
             FailedFieldingFlavor::CantCorralIt => { write!(f, "can't corral it...") }
             FailedFieldingFlavor::CantFieldIt => { write!(f, "can't field it...") }
             FailedFieldingFlavor::CantGetIt => { write!(f, "can't get it...") }
-            FailedFieldingFlavor::CantMakeTheCatch => { write!(f, "can't make the catch!") }
+            FailedFieldingFlavor::CantMakeTheCatch => { write!(f, "can't make the catch...") }
             FailedFieldingFlavor::CantScoopIt => { write!(f, "can't scoop it...") }
             FailedFieldingFlavor::CantSecureIt => { write!(f, "can't secure it...") }
             FailedFieldingFlavor::DropsIt => { write!(f, "drops it!") }
@@ -634,6 +635,11 @@ pub enum Event {
         top_of_inning: bool,
         inning: i64,
     },
+    FieldersChoice {
+        contact: Contact,
+        fielding: Fielding,
+        runner_out: RunnerDesc,
+    }
 }
 
 struct Count(i64, i64);
@@ -735,6 +741,7 @@ impl Event {
                 let text = match flavor {
                     GroundoutFlavor::GroundOutTo => { format!("Groundout to {}.", fielding.defender) }
                     GroundoutFlavor::HitsAGroundout => { format!("{} hits a groundout.", contact.batter) }
+                    GroundoutFlavor::ForcedOutAtFirst => { format!("{} is forced out at first.", contact.batter) }
                 };
                 let mut result = vec![
                     contact.to_string(),
@@ -792,6 +799,19 @@ impl Event {
             Event::EndOfHalfInning { top_of_inning, inning } => {
                 vec![format!("End of the {} of the {}.",
                              if *top_of_inning { "top" } else { "bottom" }, inning + 1)]
+            }
+            Event::FieldersChoice { contact, fielding, runner_out } => {
+                vec![
+                    contact.to_string(),
+                    fielding.to_string(),
+                    format!("{} is forced out at {}.", runner_out, match runner_out.base {
+                        1 => "Second",
+                        2 => "Third",
+                        3 => "Fourth",
+                        _ => return Err(anyhow!("Unexpected base in force out"))
+                    }),
+                    "Fielder's choice.".to_string(),
+                ]
             }
         })
     }

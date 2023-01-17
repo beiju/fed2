@@ -149,6 +149,13 @@ pub struct GameResponse {
     pub data: GameUpdateDelta,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GameEventsResponse {
+    pub items: Vec<GameResponse>,
+    pub next_page: String,
+}
+
 impl GameUpdate {
     pub fn new(delta: GameUpdateDelta) -> Self {
         let mut update = Self {

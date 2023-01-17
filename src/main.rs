@@ -17,9 +17,9 @@ use crate::parser::Parser;
 async fn async_main() -> anyhow::Result<()> {
     println!("Hello, world!");
     let response = reqwest::get("https://api2.sibr.dev/chronicler/v0/game-events?count=1000").await?;
-    let json: Vec<GameResponse> = response.json().await?;
+    let json: GameEventsResponse = response.json().await?;
 
-    let groups = json.into_iter()
+    let groups = json.items.into_iter()
         .group_by(|item| item.timestamp);
 
     let mut game_parsers: HashMap<_, Parser> = HashMap::new();
