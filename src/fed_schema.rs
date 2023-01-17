@@ -776,15 +776,16 @@ impl Event {
                 let mut lines = vec![
                     contact.to_string(),
                     fielding.to_string(),
-                    format!("{} {} {}!", contact.batter, flavor, hit_type),
                 ];
-
-                for advancement in advancements {
-                    lines.push(format!("{} advances to {}!", advancement.runner, advancement.to_base));
-                }
 
                 for runner in scores {
                     lines.push(format!("{runner} scores!"));
+                }
+
+                lines.push(format!("{} {} {}!", contact.batter, flavor, hit_type));
+
+                for advancement in advancements {
+                    lines.push(format!("{} advances to {}!", advancement.runner, advancement.to_base));
                 }
 
                 lines

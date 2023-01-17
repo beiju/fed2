@@ -579,7 +579,8 @@ pub fn parse_name_from_list<'a, 'b, E: ParseError<&'a str>>(
 pub enum FieldingResult<'a> {
     Groundout(GroundoutFlavor),
     Hit((HitType, HitFlavor)),
-    ForceOut(&'a RunnerDesc)
+    ForceOut(&'a RunnerDesc),
+    Score(&'a RunnerDesc),
 }
 
 pub fn parse_fielding_result<'a, 'b, E: ParseError<&'a str>>(
@@ -592,6 +593,7 @@ pub fn parse_fielding_result<'a, 'b, E: ParseError<&'a str>>(
             parse_groundout(batter, defender).map(|r| FieldingResult::Groundout(r)),
             parse_base_hit(batter).map(|r| FieldingResult::Hit(r)),
             parse_force_out(runners).map(|r| FieldingResult::ForceOut(r)),
+            parse_score(runners).map(|r| FieldingResult::Score(r)),
         )).parse(input)
     }
 }
@@ -632,7 +634,8 @@ pub fn parse_force_out<'a, 'b, E: ParseError<&'a str>>(
     runners: &'b [RunnerDesc],
 ) -> impl FnMut(&'a str) -> IResult<&str, &'b RunnerDesc, E> + 'b {
     move |input| {
-        for runner in runners {
+        // I think iterating in reverse will help protect me against future hand-holding
+        for runner in runners.iter().rev() {
             let (input, result) = opt(parse_force_out_for_runner(runner)).parse(input)?;
             if result.is_some() {
                 return Ok((input, runner))
@@ -657,6 +660,21 @@ pub fn parse_force_out_for_runner<'a, 'b, E: ParseError<&'a str>>(
         let (input, _) = tag(".").parse(input)?;
 
         Ok((input, ()))
+    }
+}
+
+pub fn parse_score<'a, 'b, E: ParseError<&'a str>>(
+    runners: &'b [RunnerDesc],
+) -> impl FnMut(&'a str) -> IResult<&str, &'b RunnerDesc, E> + 'b {
+    move |input| {
+        // I think iterating in reverse will help protect me against future hand-holding
+        for runner in runners.iter().rev() {
+            let (input, result) = opt(terminated(parse_runner_name(runner), tag(" scores!"))).parse(input)?;
+            if result.is_some() {
+                return Ok((input, runner))
+            }
+        }
+        fail(input)
     }
 }
 

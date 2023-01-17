@@ -22,6 +22,7 @@ enum ParserExpectedEvent {
     FailedFielding(Contact, FailedFielding, Vec<RunnerDesc>),
     PostGroundOut(Contact, Fielding, GroundoutFlavor, Vec<RunnerAdvancementDesc>, Vec<RunnerDesc>),
     PostForceOut(Contact, Fielding, RunnerDesc),
+    PostHitScore(Contact, Fielding, RunnerDesc),
 }
 
 #[derive(Debug, Default)]
@@ -198,7 +199,7 @@ impl Parser {
                 let parsed = run_parser(parse_fielding_result(&contact.batter, &fielding.defender, &baserunners_before))(&delta.display_text)?;
                 match parsed {
                     FieldingResult::Groundout(flavor) => {
-                        if baserunners_before.is_empty() {
+                        if baserunners_before.is_empty() || self.state.outs > 2 {
                             self.next_event_genre = ParserExpectedEvent::BatterUp;
                             Some(Event::GroundOut {
                                 contact,
@@ -218,6 +219,12 @@ impl Parser {
                         let runner_out = runner.clone();
                         drop(parsed);
                         self.next_event_genre = ParserExpectedEvent::PostForceOut(contact, fielding, runner_out);
+                        None
+                    }
+                    FieldingResult::Score(runner) => {
+                        let scoring_runner = runner.clone();
+                        drop(parsed);
+                        self.next_event_genre = ParserExpectedEvent::PostHitScore(contact, fielding, scoring_runner);
                         None
                     }
                 }
@@ -260,6 +267,21 @@ impl Parser {
                     contact,
                     fielding,
                     runner_out,
+                })
+            }
+            ParserExpectedEvent::PostHitScore(contact, fielding, scoring_runner) => {
+                let (hit_type, flavor) = run_parser(parse_base_hit(&contact.batter))(&delta.display_text)?;
+                self.next_event_genre = ParserExpectedEvent::BatterUp;
+                Some(Event::Hit {
+                    contact,
+                    fielding: fielding.into(),
+                    hit_type,
+                    flavor,
+                    advancements: vec![],
+                    scores: vec![PlayerDesc {
+                        id: scoring_runner.id,
+                        name: scoring_runner.name,
+                    }],
                 })
             }
         };
