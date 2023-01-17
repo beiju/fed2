@@ -46,7 +46,7 @@ pub fn parse_ball<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitc
                 .map(|_| BallFlavor::DoesntBlink),
             count_dot(balls, strikes, pair(tag(pitcher_name), tag(" just misses the zone. Ball,")))
                 .map(|_| BallFlavor::JustMisses),
-            count_dot(balls, strikes, pair(tag(batter_name), tag(" lays off outside. Ball,")))
+            count_dot(balls, strikes, pair(tag(batter_name), tag(" lays off a pitch outside. Ball,")))
                 .map(|_| BallFlavor::LaysOffOutside),
             count_dot(balls, strikes, pair(tag(batter_name), tag(" looks at a ball outside. Ball,")))
                 .map(|_| BallFlavor::LooksAtBallOutside),
@@ -70,7 +70,7 @@ pub fn parse_ball<'a, 'b, E: ParseError<&'a str>>(balls: i64, strikes: i64, pitc
                 .map(|_| BallFlavor::BallPeriod),
             count_dot(balls, strikes, pair(tag(pitcher_name), tag(" misses the zone. Ball,")))
                 .map(|_| BallFlavor::MissesTheZone),
-            count_dot(balls, strikes, pair(tag(batter_name), tag(" does not chase. Ball,")))
+            count_dot(balls, strikes, pair(tag(batter_name), tag(" doesn't chase. Ball,")))
                 .map(|_| BallFlavor::DoesNotChase),
         )).parse(input)
     }
@@ -121,6 +121,8 @@ pub fn parse_strike<'a, 'b, E: ParseError<&'a str>>(
                 .map(|adj| StrikeFlavor::AdjectiveSwing(adj)),
             count_dot(balls, strikes, preceded(parse_player_name(pitcher), tag(" drops it in. Strike,")))
                 .map(|_| StrikeFlavor::DropsItIn),
+            count_dot(balls, strikes, preceded(parse_player_name(batter), tag(" swings weakly. Strike,")))
+                .map(|_| StrikeFlavor::SwingsWeakly),
         )).parse(input)
     }
 }

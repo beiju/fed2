@@ -90,6 +90,7 @@ pub enum StrikeFlavor {
     GuessesWrong,
     AdjectiveSwing(SwingAdjective),
     DropsItIn,
+    SwingsWeakly,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -674,11 +675,11 @@ impl Event {
                     BallFlavor::JustOutside => { format!("Ball, just outside. {count}.") }
                     BallFlavor::ExtremelyOutside => { format!("Ball, extremely outside. {count}.") }
                     BallFlavor::MissesTheZone => { format!("{} misses the zone. {count}.", pitcher) }
-                    BallFlavor::DoesNotChase => { format!("{} does not chase. Ball, {count}.", batter) }
+                    BallFlavor::DoesNotChase => { format!("{} doesn't chase. Ball, {count}.", batter) }
                     BallFlavor::Adjective(adj) => { format!("{adj} pitch. Ball, {count}.") }
                     BallFlavor::DoesntBlink => { format!("{} doesn't blink. {count}.", batter) }
                     BallFlavor::JustMisses => { format!("{} just misses the zone. Ball, {count}.", pitcher) }
-                    BallFlavor::LaysOffOutside => { format!("{} lays off outside. {count}.", pitcher) }
+                    BallFlavor::LaysOffOutside => { format!("{} lays off a pitch outside. Ball, {count}.", batter) }
                     BallFlavor::LooksAtBallOutside => { format!("{} looks at a ball outside. {count}.", batter) }
                     BallFlavor::MissesBigTime => { format!("{} misses big time. Ball, {count}.", pitcher) }
                     BallFlavor::Stumbles => { format!("{} stumbles. {count}.", pitcher) }
@@ -703,6 +704,7 @@ impl Event {
                     StrikeFlavor::GuessesWrong => { format!("{} guesses wrong. Strike, {count}.", batter) }
                     StrikeFlavor::AdjectiveSwing(adj) => { format!("{} takes a {adj} swing. Strike, {count}.", batter) }
                     StrikeFlavor::DropsItIn => { format!("{} drops it in. Strike, {count}.", pitcher) }
+                    StrikeFlavor::SwingsWeakly => { format!("{} swings weakly. Strike, {count}.", batter) }
                 };
                 vec![text, String::new()]
             }
